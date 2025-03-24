@@ -12,97 +12,9 @@ from transformers import AutoImageProcessor, VideoMAEForPreTraining, VideoMAECon
 import av
 import os
 import numpy as np  
+from dataset import UCF101
 
 data_path = '/share/j_sun/jth264/UCF101_subset'
-class UCF101(Dataset):
-    '''
-    Each data entry should contain 16 frames and a label. The 16 frames are sampled from the video.
-    Data is stored in a folder with the following structure:
-    /path/to/data/
-        train/
-            ├── class1/
-                |video1.avi
-                |video2.avi
-            ├── class2/
-            │
-    '''
-    def __init__(self, data_path, train= True, clip_len = 16, transform=None):
-        self.data_path = data_path
-        self.train = train
-        self.transform = transform
-        self.data = []
-        self.labels = []
-        self.classes = []
-        self.load_data()
-    
-    def read_video_pyav(self, container, indices):
-        '''
-        Decode the video with PyAV decoder.
-        Args:
-            container (`av.container.input.InputContainer`): PyAV container.
-            indices (`List[int]`): List of frame indices to decode.
-        Returns:
-            result (np.ndarray): np array of decoded frames of shape (num_frames, height, width, 3).
-        
-        Example:
-            container = av.open(video_path)
-            frames = read_video_pyav(container, indices)
-        '''
-        frames = []
-        container.seek(0)
-        start_index = indices[0]
-        end_index = indices[-1]
-        for i, frame in enumerate(container.decode(video=0)):
-            if i > end_index:
-                break
-            if i >= start_index and i in indices:
-                frames.append(frame)
-        return np.stack([x.to_ndarray(format="rgb24") for x in frames])
-
-    def sample_frame_indices(self, clip_len, frame_sample_rate, seg_len):
-        '''
-        Sample a given number of frame indices from the video.
-        Args:
-            clip_len (`int`): Total number of frames to sample.
-            frame_sample_rate (`int`): Sample every n-th frame.
-            seg_len (`int`): Maximum allowed index of sample's last frame.
-        Returns:
-            indices (`List[int]`): List of sampled frame indices
-        '''
-        converted_len = int(clip_len * frame_sample_rate)
-        end_idx = np.random.randint(converted_len, seg_len)
-        start_idx = end_idx - converted_len
-        indices = np.linspace(start_idx, end_idx, num=clip_len)
-        indices = np.clip(indices, start_idx, end_idx - 1).astype(np.int64)
-        return indices
-
-    def load_data(self):
-        path = os.path.join(self.data_path, 'train' if self.train else 'test')
-        for class_name in os.listdir(path):
-            print(f"Loading {class_name}...")
-            class_path = os.path.join(path, class_name)
-            if not os.path.isdir(class_path): continue
-            self.classes.append(class_name)
-            class_idx = len(self.classes) - 1
-            for video_name in os.listdir(class_path):
-                #print(f"Loading {video_name}...")
-                video_path = os.path.join(class_path, video_name) 
-                if not os.path.isfile(video_path): continue
-                container = av.open(video_path)
-                indices = self.sample_frame_indices(clip_len=16, frame_sample_rate=1, seg_len=container.streams.video[0].frames)
-                video = self.read_video_pyav(container, indices)
-                self.data.append(video)
-                self.labels.append(class_idx)
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        #preprocess the data using transform
-        if self.transform:
-            return self.transform(self.data[idx]), self.labels[idx]
-        else: 
-            return self.data[idx], self.labels[idx]
 
 class VideoMAEModel(L.LightningModule):
     def __init__(self, num_classes):

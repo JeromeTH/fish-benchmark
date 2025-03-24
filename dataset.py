@@ -1,6 +1,10 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
+import os
+import av
+import numpy as np
+from utils import read_video_pyav, sample_frame_indices
 
 # Video parameters
 num_frames = 300
@@ -29,8 +33,52 @@ class VideoDataset(Dataset):
         clip = torch.tensor(clip, dtype=torch.float32) / 255.0  # Convert to tensor on-demand
         return clip
 
-# Create dataset and dataloader
-dataset = VideoDataset(video, clip_length, stride)
-dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
+class UCF101(Dataset):
+    '''
+    Each data entry should contain 16 frames and a label. The 16 frames are sampled from the video.
+    Data is stored in a folder with the following structure:
+    /path/to/data/
+        train/
+            ├── class1/
+                |video1.avi
+                |video2.avi
+            ├── class2/
+            │
+    '''
+    def __init__(self, data_path, train= True, clip_len = 16, transform=None):
+        self.data_path = data_path
+        self.train = train
+        self.transform = transform
+        self.data = []
+        self.labels = []
+        self.classes = []
+        self.load_data()
 
+    def load_data(self):
+        path = os.path.join(self.data_path, 'train' if self.train else 'test')
+        for class_name in os.listdir(path):
+            print(f"Loading {class_name}...")
+            class_path = os.path.join(path, class_name)
+            if not os.path.isdir(class_path): continue
+            self.classes.append(class_name)
+            class_idx = len(self.classes) - 1
+            for video_name in os.listdir(class_path):
+                #print(f"Loading {video_name}...")
+                video_path = os.path.join(class_path, video_name) 
+                if not os.path.isfile(video_path): continue
+                container = av.open(video_path)
+                indices = sample_frame_indices(clip_len=16, frame_sample_rate=1, seg_len=container.streams.video[0].frames)
+                video = read_video_pyav(container, indices)
+                self.data.append(video)
+                self.labels.append(class_idx)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        #preprocess the data using transform
+        if self.transform:
+            return self.transform(self.data[idx]), self.labels[idx]
+        else: 
+            return self.data[idx], self.labels[idx]
