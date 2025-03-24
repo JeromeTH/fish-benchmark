@@ -33,7 +33,4 @@ class VideoDataset(Dataset):
 dataset = VideoDataset(video, clip_length, stride)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-# Example: Iterate through batches
-for batch in dataloader:
-    print("Batch shape:", batch.shape)  # Expected: (32, 16, 3, 224, 224)
-    break  # Show first batch
+
