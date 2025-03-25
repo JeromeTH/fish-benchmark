@@ -17,10 +17,12 @@ from dataset import UCF101
 data_path = '/share/j_sun/jth264/UCF101_subset'
 
 class VideoMAEModel(L.LightningModule):
-    def __init__(self, num_classes):
+    def __init__(self, classes):
         super(VideoMAEModel, self).__init__()
         self.model = VideoMAEForVideoClassification.from_pretrained("MCG-NJU/videomae-base-finetuned-kinetics")
-        self.model.classifier = nn.Linear(self.model.classifier.in_features, num_classes)
+        self.num_classes = len(classes)
+        self.model.classifier = nn.Linear(self.model.classifier.in_features, self.num_classes)
+        self.classes = classes
 
     def forward(self, x):
         return self.model(x).logits
@@ -58,10 +60,12 @@ if __name__ == '__main__':
     #Question: How does the image preprocessing stage come into the pipeline if we want to make each entity as decoupled as possible. 
     #Naturally, we make dataset only responsible for loading the data, and the model for training. but we also don't want to preprocess everytime we input the data to the model.
     #Answer: We can preprocess the data in the __getitem__ method of the dataset class, and store the preprocessed data in the dataset.
-   
-    trainer = L.Trainer(max_epochs=10)
-    model = VideoMAEModel(num_classes=len(train_dataset.classes))
+    print("classes:", train_dataset.classes)
+    trainer = L.Trainer(max_epochs=1)
+    model = VideoMAEModel(classes=train_dataset.classes)
     #train the model
     trainer.fit(model, train_dataloader)
     #evaluate the model
     trainer.test(model, test_dataloader)
+    #save the model
+    trainer.save_checkpoint("video_mae_model.ckpt")

@@ -14,9 +14,9 @@ def read_video_pyav(container, indices):
         frames = read_video_pyav(container, indices)
     '''
     frames = []
-    container.seek(0)
     start_index = indices[0]
     end_index = indices[-1]
+    container.seek(0)
     for i, frame in enumerate(container.decode(video=0)):
         if i > end_index:
             break

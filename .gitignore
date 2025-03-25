@@ -1,2 +1,4 @@
 .ipynb_checkpoints/
 /lightning_logs/
+*.ckpt
+/__pycache__/
