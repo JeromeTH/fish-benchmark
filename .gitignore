@@ -1,4 +1,6 @@
 .ipynb_checkpoints/
 /lightning_logs/
 *.ckpt
-/__pycache__/
+**/__pycache__/
+/caltech101/
+/fish_benchmark.egg-info/

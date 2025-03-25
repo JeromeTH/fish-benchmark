@@ -7,45 +7,11 @@ import lightning as L
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-from transformers import VideoMAEForVideoClassification
 from transformers import AutoImageProcessor, VideoMAEForPreTraining, VideoMAEConfig
-import av
-import os
-import numpy as np  
-from dataset import UCF101
+from fish_benchmark.dataset import UCF101
+from fish_benchmark.models import VideoMAEModel
 
 data_path = '/share/j_sun/jth264/UCF101_subset'
-
-class VideoMAEModel(L.LightningModule):
-    def __init__(self, classes):
-        super(VideoMAEModel, self).__init__()
-        self.model = VideoMAEForVideoClassification.from_pretrained("MCG-NJU/videomae-base-finetuned-kinetics")
-        self.num_classes = len(classes)
-        self.model.classifier = nn.Linear(self.model.classifier.in_features, self.num_classes)
-        self.classes = classes
-
-    def forward(self, x):
-        return self.model(x).logits
-    
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x)
-        loss = F.cross_entropy(logits, y)
-        self.log('train_loss', loss)
-        return loss
-    
-    def test_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x)
-        loss = F.cross_entropy(logits, y)
-        self.log('test_loss', loss)
-        return loss
-    
-    def configure_optimizers(self):
-        #only update the classifier
-        optimizer = torch.optim.Adam(self.model.classifier.parameters(), lr=1e-4)
-        return optimizer
-
 
 if __name__ == '__main__':
     print("Loading data...")

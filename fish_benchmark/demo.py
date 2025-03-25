@@ -5,24 +5,13 @@ sliding window with length of 16 frames as input and classifies the video clip a
 a video and visulize the classification results continuously.
 '''
 #import abstractmethod
-import av
 import cv2
 from utils import read_video_pyav
-from dataset import UCF101
-from video_mae import VideoMAEModel
-from transformers import AutoImageProcessor
 import torch
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-data_path = '/share/j_sun/jth264/UCF101_subset'
-video_path = '/share/j_sun/jth264/UCF101_subset/test/Basketball/v_Basketball_g02_c04.avi' 
-MODEL_NAME = "video-mae"
-config_setting = {
-    "video-mae": {
 
-    }
-}
-config = config_setting[MODEL_NAME]
+
 class ContinuousVideoClassifier:
     '''
     Interface for continuous video classifier.
@@ -129,23 +118,3 @@ def visualize(container, indices, labels, category_names, output_path="output.mp
 
     out.release()  # Release the video writer
     print(f"Video saved to {output_path}")
-
-if __name__ == '__main__':
-    print("Loading video...")
-    container = av.open(video_path)
-    print("Video loaded.")
-    image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base", use_fast = True)
-    transform = lambda video: image_processor(list(video), return_tensors="pt").pixel_values.squeeze(0)
-    dataset = SlidingWindowVideoDataset(container, transform, clip_length=16, stride=5)
-
-    classes = UCF101(data_path, train=False, transform=None).classes
-    print("Loading model...")
-    model = VideoMAEModel.load_from_checkpoint("video_mae_model.ckpt", classes=classes)
-    print("Model loaded.")
-    classifier = ContinuousVideoClassifier(model, dataset)
-
-    print("Running continuous classification...")
-    indices, labels = classifier.run()
-    print(indices)
-    print(labels)
-    visualize(container, indices, labels, classes)

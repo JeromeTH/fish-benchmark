@@ -46,29 +46,35 @@ class UCF101(Dataset):
             ├── class2/
             │
     '''
-    def __init__(self, data_path, train= True, clip_len = 16, transform=None):
+    def __init__(self, data_path, train= True, clip_len = 16, transform=None, load_data = True):
         self.data_path = data_path
         self.train = train
         self.transform = transform
+        self.clip_len = clip_len
+        # Step 1: Precompute a fixed, sorted class list
+        train_classes = sorted([d for d in os.listdir(os.path.join(data_path, 'train')) if os.path.isdir(os.path.join(data_path, 'train', d))])
+        test_classes = sorted([d for d in os.listdir(os.path.join(data_path, 'test')) if os.path.isdir(os.path.join(data_path, 'test', d))])
+        
+        # Take only common classes to prevent index mismatch
+        self.classes = sorted(set(train_classes) & set(test_classes))
+        self.class_to_idx = {cls: idx for idx, cls in enumerate(self.classes)}  # Fixed mapping
+
         self.data = []
         self.labels = []
-        self.classes = []
-        self.load_data()
+        if load_data:
+            self.load_data()
 
     def load_data(self):
         path = os.path.join(self.data_path, 'train' if self.train else 'test')
-        for class_name in os.listdir(path):
-            print(f"Loading {class_name}...")
+        for class_name in self.classes: 
             class_path = os.path.join(path, class_name)
             if not os.path.isdir(class_path): continue
-            self.classes.append(class_name)
-            class_idx = len(self.classes) - 1
+            class_idx = self.class_to_idx[class_name]
             for video_name in os.listdir(class_path):
-                #print(f"Loading {video_name}...")
                 video_path = os.path.join(class_path, video_name) 
                 if not os.path.isfile(video_path): continue
                 container = av.open(video_path)
-                indices = sample_frame_indices(clip_len=16, frame_sample_rate=1, seg_len=container.streams.video[0].frames)
+                indices = sample_frame_indices(clip_len=self.clip_len, frame_sample_rate=1, seg_len=container.streams.video[0].frames)
                 video = read_video_pyav(container, indices)
                 self.data.append(video)
                 self.labels.append(class_idx)
