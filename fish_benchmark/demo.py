@@ -26,9 +26,12 @@ class ContinuousVideoClassifier:
         '''
         indices = []
         labels = []
+        device = next(self.model.parameters()).device
+        print("device:", device)
         for id, batch in enumerate(self.dataloader):
             print(f"Processing batch {id}...")
             middle_idx, input = batch
+            input = input.to(device)
             with torch.no_grad():
                 logits = self.model(input)
             print(logits.shape)

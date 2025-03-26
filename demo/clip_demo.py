@@ -6,7 +6,7 @@ from torchvision.datasets import Caltech101
 from torch.utils.data import DataLoader
 
 video_path = '/share/j_sun/jth264/UCF101_subset/test/Basketball/v_Basketball_g02_c04.avi' 
-model_checkpoint = 'clip_model.ckpt'
+model_checkpoint = '~/fish-benchmark/lightning_logs/version_16/checkpoints/epoch=11-step=2604.ckpt'
 output_path = 'clip_demo.mp4'
 
 if __name__ == '__main__':
