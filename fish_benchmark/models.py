@@ -1,25 +1,23 @@
-from transformers import VideoMAEForVideoClassification, CLIPVisionModel, AutoModel
+from transformers import VideoMAEModel, CLIPVisionModel, AutoModel
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import lightning as L
 import wandb
 
-class VideoMAEModel(L.LightningModule):
-    def __init__(self, num_classes):
-        super(VideoMAEModel, self).__init__()
-        self.model = VideoMAEForVideoClassification.from_pretrained("MCG-NJU/videomae-base-finetuned-kinetics")
-        self.num_classes = num_classes
-        self.model.classifier = nn.Linear(self.model.classifier.in_features, self.num_classes)
-
-    def forward(self, x):
-        return self.model(x).logits
-    
+class BaseClassifier(L.LightningModule):
+    '''
+    subclasses have to have a model component and a classifier component
+    '''
     def training_step(self, batch, batch_idx):
         x, y = batch
         logits = self(x)
         loss = F.cross_entropy(logits, y)
         self.log('train_loss', loss)
+        #train acc
+        preds = torch.argmax(logits, dim=1)
+        acc = (preds == y).float().mean()
+        self.log('train_acc', acc)
         return loss
     
     def test_step(self, batch, batch_idx):
@@ -27,15 +25,40 @@ class VideoMAEModel(L.LightningModule):
         logits = self(x)
         loss = F.cross_entropy(logits, y)
         self.log('test_loss', loss)
-        return loss
-    
+        #test acc
+        preds = torch.argmax(logits, dim=1)
+        acc = (preds == y).float().mean()
+        self.log('test_acc', acc)
+
     def configure_optimizers(self):
-        #only update the classifier
-        optimizer = torch.optim.Adam(self.model.classifier.parameters(), lr=1e-4)
+        learning_rate = 1e-4
+        model_param = [param for name, param in self.named_parameters() if 'model' in name]
+        classifier_param = [param for name, param in self.named_parameters() if 'classifier' in name]
+        optimizer = torch.optim.AdamW([{'params': model_param},
+                                   {'params': classifier_param,
+                                    'lr': learning_rate * 10}],
+                                lr=learning_rate, weight_decay=0.001)
         return optimizer
 
+class VideoMAEClassifier(BaseClassifier):
+    def __init__(self, num_classes):
+        super(VideoMAEClassifier, self).__init__()
+        self.model = VideoMAEModel.from_pretrained("MCG-NJU/videomae-base")
+        self.hidden_size = self.model.config.hidden_size
+        self.num_classes = num_classes
+        self.classifier = nn.Sequential(
+            nn.Linear(self.hidden_size, 512),  # You can adjust the hidden layer size as needed
+            nn.ReLU(),
+            nn.Linear(512, num_classes)  # Final layer to predict the number of classes
+        )
 
-class CLIPImageClassifier(L.LightningModule):
+    def forward(self, x):
+        last_hidden_state = self.model(x).last_hidden_state
+        cls_token = last_hidden_state[:, 0, :]  # Extract the [CLS] token
+        logits = self.classifier(cls_token)
+        return logits
+
+class CLIPImageClassifier(BaseClassifier):
     def __init__(self, num_classes):
         super().__init__()
         self.model = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
@@ -46,68 +69,15 @@ class CLIPImageClassifier(L.LightningModule):
         x = self.classifier(x)
         return x
     
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x)
-        loss = F.cross_entropy(logits, y)
-        self.log('train_loss', loss)
-        return loss
-    
-    def test_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x)
-        loss = F.cross_entropy(logits, y)
-        preds = torch.argmax(logits, dim=1)
-        acc = (preds == y).float().mean()
-        self.log('test_loss', loss)
-        self.log('test_acc', acc)
-    
-    def configure_optimizers(self):
-        learning_rate = 1e-4
-        params_1x = [param for name, param in self.named_parameters()
-             if name not in ["classifier.weight", "classifier.bias"]]
-        optimizer = torch.optim.AdamW([{'params': params_1x},
-                                   {'params': self.classifier.parameters(),
-                                    'lr': learning_rate * 10}],
-                                lr=learning_rate, weight_decay=0.001)
-        return optimizer
-    
-class DINOImageClassifier(L.LightningModule):
+class DINOImageClassifier(BaseClassifier):
     def __init__(self, num_classes=2):
         super().__init__()
         self.model = AutoModel.from_pretrained('facebook/dinov2-base')
+        for param in self.model.parameters():
+            param.requires_grad = False
         self.classifier = nn.Linear(self.model.config.hidden_size, num_classes)
         
     def forward(self, x):
-        with torch.no_grad():
-            x = self.model(x).pooler_output
+        x = self.model(x).pooler_output
         x = self.classifier(x)
         return x
-    
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x)
-        loss = F.cross_entropy(logits, y)
-        self.log('train_loss', loss)
-        return loss
-    
-    def test_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self(x)
-        loss = F.cross_entropy(logits, y)
-
-        preds = torch.argmax(logits, dim=1)
-        acc = (preds == y).float().mean()
-        self.log('test_loss', loss)
-        self.log('test_acc', acc)
-        wandb.log({"test_acc": acc})
-    
-    def configure_optimizers(self):
-        learning_rate = 1e-4
-        params_1x = [param for name, param in self.named_parameters()
-             if name not in ["classifier.weight", "classifier.bias"]]
-        optimizer = torch.optim.AdamW([{'params': params_1x},
-                                   {'params': self.classifier.parameters(),
-                                    'lr': learning_rate * 10}],
-                                lr=learning_rate, weight_decay=0.001)
-        return optimizer

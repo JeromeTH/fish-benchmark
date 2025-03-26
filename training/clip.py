@@ -17,6 +17,7 @@ wandb_logger = WandbLogger(
     save_dir="./logs",
     log_model=True
 )
+
 if __name__ == '__main__':
     print("Loading data...")
     processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
@@ -25,8 +26,8 @@ if __name__ == '__main__':
     print("Data loaded.")
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False)
-
-    trainer = L.Trainer(max_epochs=1, logger=wandb_logger)
+    
+    trainer = L.Trainer(max_epochs=10, logger=wandb_logger)
     model = CLIPImageClassifier(num_classes=len(train_dataset.categories))
     #train the model
     trainer.fit(model, train_dataloader)
