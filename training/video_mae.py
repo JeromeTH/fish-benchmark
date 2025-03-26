@@ -27,7 +27,7 @@ if __name__ == '__main__':
     #Naturally, we make dataset only responsible for loading the data, and the model for training. but we also don't want to preprocess everytime we input the data to the model.
     #Answer: We can preprocess the data in the __getitem__ method of the dataset class, and store the preprocessed data in the dataset.
     print("classes:", train_dataset.classes)
-    trainer = L.Trainer(max_epochs=1)
+    trainer = L.Trainer(max_epochs=1, gpus=1)
     model = VideoMAEModel(classes=train_dataset.classes)
     #train the model
     trainer.fit(model, train_dataloader)

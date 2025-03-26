@@ -4,3 +4,4 @@
 **/__pycache__/
 /caltech101/
 /fish_benchmark.egg-info/
+*.mp4

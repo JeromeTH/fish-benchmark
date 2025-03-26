@@ -6,7 +6,7 @@ a video and visulize the classification results continuously.
 '''
 #import abstractmethod
 import cv2
-from utils import read_video_pyav
+from fish_benchmark.utils import read_video_pyav
 import torch
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
@@ -16,9 +16,9 @@ class ContinuousVideoClassifier:
     '''
     Interface for continuous video classifier.
     '''
-    def __init__(self, model, dataset):
+    def __init__(self, model, dataloader):
         self.model = model
-        self.dataset = dataset
+        self.dataloader = dataloader
     
     def run(self):
         '''
@@ -26,8 +26,7 @@ class ContinuousVideoClassifier:
         '''
         indices = []
         labels = []
-        dataloader = DataLoader(self.dataset, batch_size=32, shuffle=False)
-        for id, batch in enumerate(dataloader):
+        for id, batch in enumerate(self.dataloader):
             print(f"Processing batch {id}...")
             middle_idx, input = batch
             with torch.no_grad():
@@ -73,7 +72,7 @@ class RegularFramesVideoDataset(Dataset):
     def __getitem__(self, idx):
         video = read_video_pyav(self.container, [idx])
         transformed_single_frame_video = self.transform(video)
-        frame = transformed_single_frame_video[0]
+        frame = transformed_single_frame_video.squeeze(0) #squeeze the time dimention
         return idx, frame #shape of frame is (3, 224, 224)
 
 def visualize(container, indices, labels, category_names, output_path="output.mp4", fps=30):
@@ -95,6 +94,7 @@ def visualize(container, indices, labels, category_names, output_path="output.mp
     index_label_map = dict(zip(indices, labels))  # Map frame indices to labels
 
     # Get video stream details
+    container.seek(0)
     first_frame = next(container.decode(video=0))  # Read first frame to get size
     frame_width, frame_height = first_frame.width, first_frame.height
     

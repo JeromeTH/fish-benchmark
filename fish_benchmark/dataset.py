@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 import os
 import av
 import numpy as np
-from utils import read_video_pyav, sample_frame_indices
+from fish_benchmark.utils import read_video_pyav, sample_frame_indices
 
 # Video parameters
 num_frames = 300

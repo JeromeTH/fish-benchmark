@@ -1,5 +1,7 @@
 import numpy as np
-
+from torchvision.datasets import Caltech101
+from torch.utils.data import Subset
+import torch
 def read_video_pyav(container, indices):
     '''
     Decode the video with PyAV decoder.
@@ -40,3 +42,19 @@ def sample_frame_indices(clip_len, frame_sample_rate, seg_len):
     indices = np.linspace(start_idx, end_idx, num=clip_len)
     indices = np.clip(indices, start_idx, end_idx - 1).astype(np.int64)
     return indices
+
+def load_caltech101(train_augs, test_augs):
+    dataset = Caltech101(root='.', target_type = "category", transform= train_augs, download=True)
+    # print(dataset.categories)
+    #generate random indices to be the training set * 0.8, will split using SubSet later to be the training set 
+    random_perm = torch.randperm(len(dataset))
+    training_indices = random_perm[:int(0.8 * len(dataset))]  # 80% for training
+    testing_indices = random_perm[int(0.8 * len(dataset)):]  # 20% for testing
+    train_dataset = Subset(dataset, training_indices)
+    test_dataset = Subset(dataset, testing_indices) 
+     # Reattach `categories` attribute
+    train_dataset.categories = dataset.categories
+    test_dataset.categories = dataset.categories
+    train_dataset.transform = train_augs
+    test_dataset.transform = test_augs
+    return train_dataset, test_dataset
