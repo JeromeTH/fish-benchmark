@@ -8,8 +8,15 @@ from fish_benchmark.models import DINOImageClassifier
 from torchvision.datasets import Caltech101
 from torch.utils.data import Subset
 from fish_benchmark.utils import load_caltech101
+from pytorch_lightning.loggers import WandbLogger
 
 data_path = '/share/j_sun/jth264/UCF101_subset'
+
+wandb_logger = WandbLogger(
+    project="dino_training",    
+    save_dir="./logs",
+    log_model=True
+)
 
 if __name__ == '__main__':
     print("Loading data...")
@@ -20,8 +27,8 @@ if __name__ == '__main__':
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-    trainer = L.Trainer(max_epochs=20)
     model = DINOImageClassifier(num_classes=len(train_dataset.categories))
+    trainer = L.Trainer(max_epochs=1, logger=wandb_logger)
     #train the model
     trainer.fit(model, train_dataloader)
     #evaluate the model
