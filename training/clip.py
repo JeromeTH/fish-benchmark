@@ -7,31 +7,42 @@ from transformers import AutoProcessor
 from fish_benchmark.models import CLIPImageClassifier
 from fish_benchmark.utils import load_caltech101
 from pytorch_lightning.loggers import WandbLogger
+import wandb
 
 data_path = '/share/j_sun/jth264/UCF101_subset'
 available_gpus = torch.cuda.device_count()
 print(f"Available GPUs: {available_gpus}")
-
-wandb_logger = WandbLogger(
-    project="clip_training",    
-    save_dir="./logs",
-    log_model=True
-)
+project = "clip_training"
 
 if __name__ == '__main__':
-    print("Loading data...")
-    processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
-    image_transform = lambda img: processor(images = img, return_tensors="pt").pixel_values.squeeze(0)
-    train_dataset, test_dataset = load_caltech101(train_augs=image_transform, test_augs=image_transform)
-    print("Data loaded.")
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
-    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False)
-    
-    trainer = L.Trainer(max_epochs=10, logger=wandb_logger)
-    model = CLIPImageClassifier(num_classes=len(train_dataset.categories))
-    #train the model
-    trainer.fit(model, train_dataloader)
-    #evaluate the model
-    trainer.test(model, test_dataloader)
-    #save the model
-    trainer.save_checkpoint("clip_model.ckpt")
+    with wandb.init(
+        project=project,
+        notes="Freezing the model parameters and only tuning the classifier head",
+        tags=["dino", "first_stage", "clip_classification"],
+        config={"epochs": 10, "learning_rate": 0.001, "batch_size": 32},
+        dir="./logs"
+    ) as run:
+        wandb_logger = WandbLogger(
+            project=run.project,    
+            save_dir="./logs",
+            log_model=True
+        )
+        print("Loading data...")
+        processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        image_transform = lambda img: processor(images = img, return_tensors="pt").pixel_values.squeeze(0)
+        train_dataset, test_dataset = load_caltech101(train_augs=image_transform, test_augs=image_transform)
+        print("Data loaded.")
+        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], shuffle=True)
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'], shuffle=False)
+        
+        trainer = L.Trainer(max_epochs=10, logger=wandb_logger)
+        model = CLIPImageClassifier(
+            num_classes=len(train_dataset.categories), 
+            learning_rate=run.config['learning_rate']
+        )
+        #train the model
+        trainer.fit(model, train_dataloader)
+        #evaluate the model
+        trainer.test(model, test_dataloader)
+        #save the model
+        trainer.save_checkpoint("clip_model.ckpt")

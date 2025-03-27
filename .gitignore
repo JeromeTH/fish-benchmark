@@ -6,3 +6,4 @@
 /fish_benchmark.egg-info/
 *.mp4
 /logs/
+/wandb/

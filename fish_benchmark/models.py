@@ -9,6 +9,10 @@ class BaseClassifier(L.LightningModule):
     '''
     subclasses have to have a model component and a classifier component
     '''
+    def __init__(self, learning_rate=1e-4):
+        super().__init__()
+        self.save_hyperparameters()  # Automatically saves learning_rate to self.hparams
+
     def training_step(self, batch, batch_idx):
         x, y = batch
         logits = self(x)
@@ -31,7 +35,7 @@ class BaseClassifier(L.LightningModule):
         self.log('test_acc', acc)
 
     def configure_optimizers(self):
-        learning_rate = 1e-4
+        learning_rate = self.hparams.learning_rate
         model_param = [param for name, param in self.named_parameters() if 'model' in name]
         classifier_param = [param for name, param in self.named_parameters() if 'classifier' in name]
         optimizer = torch.optim.AdamW([{'params': model_param},
@@ -41,8 +45,8 @@ class BaseClassifier(L.LightningModule):
         return optimizer
 
 class VideoMAEClassifier(BaseClassifier):
-    def __init__(self, num_classes):
-        super(VideoMAEClassifier, self).__init__()
+    def __init__(self, num_classes, learning_rate=1e-4):
+        super().__init__(learning_rate)
         self.model = VideoMAEModel.from_pretrained("MCG-NJU/videomae-base")
         self.hidden_size = self.model.config.hidden_size
         self.num_classes = num_classes
@@ -59,8 +63,8 @@ class VideoMAEClassifier(BaseClassifier):
         return logits
 
 class CLIPImageClassifier(BaseClassifier):
-    def __init__(self, num_classes):
-        super().__init__()
+    def __init__(self, num_classes, learning_rate = 1e-4):
+        super().__init__(learning_rate)
         self.model = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
         self.classifier = nn.Linear(self.model.config.hidden_size, num_classes)
         
@@ -70,8 +74,8 @@ class CLIPImageClassifier(BaseClassifier):
         return x
     
 class DINOImageClassifier(BaseClassifier):
-    def __init__(self, num_classes=2):
-        super().__init__()
+    def __init__(self, num_classes, learning_rate = 1e-4):
+        super().__init__(learning_rate)
         self.model = AutoModel.from_pretrained('facebook/dinov2-base')
         for param in self.model.parameters():
             param.requires_grad = False
