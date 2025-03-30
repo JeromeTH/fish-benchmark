@@ -80,7 +80,6 @@ class DINOImageClassifier(BaseClassifier):
         for param in self.model.parameters():
             param.requires_grad = False
         self.classifier = nn.Linear(self.model.config.hidden_size, num_classes)
-        
     def forward(self, x):
         x = self.model(x).pooler_output
         x = self.classifier(x)

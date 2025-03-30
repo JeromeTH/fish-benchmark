@@ -58,3 +58,28 @@ def load_caltech101(train_augs, test_augs):
     train_dataset.transform = train_augs
     test_dataset.transform = test_augs
     return train_dataset, test_dataset
+
+import heapq
+
+class PriorityQueue:
+    def __init__(self, items=None):
+        self._heap = items if items is not None else []
+        heapq.heapify(self._heap)
+    
+    def push(self, item):
+        heapq.heappush(self._heap, item)
+    
+    def pop(self):
+        return heapq.heappop(self._heap)
+    
+    def peek(self):
+        return self._heap[0]
+    
+    def is_empty(self):
+        return not self._heap
+    
+    def size(self):
+        return len(self._heap)
+    
+    def to_list(self):
+        return sorted(self._heap)

@@ -32,7 +32,7 @@ project = "dino_training"
 if __name__ == '__main__':
     with wandb.init(
         project=project,
-        notes="Freezing the model parameters and only tuning the classifier head",
+        notes="Freezing the whole model and the classifier. Should not be trainable.",
         tags=["dino", "first_stage", "dino_classification"],
         config={"epochs": 10, "learning_rate": 0.001, "batch_size": 32},
         dir="./logs"
