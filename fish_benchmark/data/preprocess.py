@@ -14,6 +14,12 @@ class Behavior(BaseModel):
     name: str
     category: str
     type: str
+    def __hash__(self):
+        return hash((self.category, self.name, self.type))
+
+    def __eq__(self, other):
+        return isinstance(other, Behavior) and (self.name, self.category, self.type) == (other.name, other.category, other.type)
+
     
 class Event(BaseModel):
     start_time: float
@@ -41,10 +47,9 @@ class MediaAnnotation:
     '''
     def __init__(self, annotation_path):
         self.df = self.read_df(annotation_path)
-        self.metadata: Metadata = self.load_metadata()
-        self.behaviors: List[Behavior] = self.load_behaviors()
-        self.events: List[Event] = self.load_events()
-
+        self.metadata: Metadata = self.parse_metadata()
+        self.behaviors: List[Behavior] = self.parse_behaviors()
+        self.events: List[Event] = self.parse_events()
         self.annotation_path = None
         self.video_path = None
 
@@ -54,7 +59,7 @@ class MediaAnnotation:
         df.columns = df.columns.str.replace(' ', '_').str.lower()
         return df
 
-    def load_metadata(self):
+    def parse_metadata(self):
         '''
         Load metadata from a BORIS file.
         '''
@@ -70,7 +75,7 @@ class MediaAnnotation:
         )
         return metadata
 
-    def load_behaviors(self):
+    def parse_behaviors(self):
         '''
         Load behaviors from a BORIS file.
         '''
@@ -84,9 +89,9 @@ class MediaAnnotation:
                     type=row['behavior_type']
                 )
             behavior_list.append(behavior)
-        self.behaviors = behavior_list
+        return behavior_list
 
-    def load_events(self):
+    def parse_events(self):
         '''
         Load events from a BORIS file.
         '''
@@ -161,7 +166,7 @@ class MediaAnnotation:
         active_events = PriorityQueue()
         for frame_id, frame in enumerate(self.container.decode(video=0)):
             # Check if any events should start
-            while event_queue and event_queue.peek()[0] <= frame_id:
+            while not event_queue.is_empty() and event_queue.peek()[0] <= frame_id:
                 _, id, event = event_queue.pop()
                 active_events.push((event.end_frame, id, event))
             # Annotate the frame with the active events

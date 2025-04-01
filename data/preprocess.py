@@ -3,7 +3,7 @@ Preprocess the annotations to frame and label pairs. frames are stored as pngs, 
 every 1000 frames are stored in as a shard using a tar file. This is then loaded using the webdataset module. 
 '''
 import os
-from fish_benchmark.preprocess import MediaAnnotation
+from fish_benchmark.data.preprocess import MediaAnnotation
 import json
 from tqdm import tqdm
 import tarfile
@@ -123,4 +123,3 @@ if __name__ == '__main__':
             base_name = f"{video_name}_{frame_id}"
             shard_writer.add(frame_id, f"{base_name}.png", frame, f"{base_name}.json", label)
         shard_writer.flush()
-

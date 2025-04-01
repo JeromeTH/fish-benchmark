@@ -1,0 +1,62 @@
+[
+    {
+        "name": "Cleaner wrasse",
+        "category": "Prolonged activity",
+        "type": "STATE"
+    },
+    {
+        "name": "Rubble habitat",
+        "category": "Habitat",
+        "type": "STATE"
+    },
+    {
+        "name": "Traversing/swimming",
+        "category": "Prolonged activity",
+        "type": "STATE"
+    },
+    {
+        "name": "Low bites",
+        "category": "Not defined",
+        "type": "POINT"
+    },
+    {
+        "name": "Coral habitat",
+        "category": "Habitat",
+        "type": "STATE"
+    },
+    {
+        "name": "Social foraging/swimming",
+        "category": "Social state",
+        "type": "STATE"
+    },
+    {
+        "name": "Solo foraging/swimming",
+        "category": "Social state",
+        "type": "STATE"
+    },
+    {
+        "name": "Not visible",
+        "category": "Prolonged activity",
+        "type": "STATE"
+    },
+    {
+        "name": "Foraging",
+        "category": "Prolonged activity",
+        "type": "STATE"
+    },
+    {
+        "name": "Seafloor bites",
+        "category": "Not defined",
+        "type": "POINT"
+    },
+    {
+        "name": "Departure",
+        "category": "Not defined",
+        "type": "POINT"
+    },
+    {
+        "name": "Sand rubbing",
+        "category": "Not defined",
+        "type": "POINT"
+    }
+]

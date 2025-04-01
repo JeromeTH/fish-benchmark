@@ -1,10 +1,14 @@
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, IterableDataset
 import os
 import av
 import numpy as np
 from fish_benchmark.utils import read_video_pyav, sample_frame_indices
+from torchvision.datasets import Caltech101
+from torch.utils.data import Subset
+import webdataset as wds
+import json
 
 # Video parameters
 num_frames = 300
@@ -88,3 +92,66 @@ class UCF101(Dataset):
             return self.transform(self.data[idx]), self.labels[idx]
         else: 
             return self.data[idx], self.labels[idx]
+
+class CalTech101WithSplit(Dataset):
+    def __init__(self, path, train=True, transform=None):
+        dataset = Caltech101(root=path, target_type = "category", transform= transform, download=True)
+        # print(dataset.categories)
+        #generate random indices to be the training set * 0.8, will split using SubSet later to be the training set 
+        random_perm = torch.randperm(len(dataset))
+        training_indices = random_perm[:int(0.8 * len(dataset))]  # 80% for training
+        testing_indices = random_perm[int(0.8 * len(dataset)):]  # 20% for testing
+        if train: 
+            res = Subset(dataset, training_indices)
+        else: 
+            res = Subset(dataset, testing_indices)
+        res.categories = dataset.categories
+        res.transform = transform
+        self.data = res
+
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+
+class HeinFishBehavior(IterableDataset):
+    def __init__(self, tar_files, img_transform=None, label_transform=None):
+        super().__init__()
+        self.tar_files = tar_files
+        self.data = wds.WebDataset(tar_files, shardshuffle=False).decode("pil").to_tuple("png", "json")
+        self.img_transform = img_transform
+        self.label_transform = label_transform
+        self.load_behavior_idx_map('behavior_categories.json')
+
+    def load_behavior_idx_map(self, path):
+        '''
+        json file containing the list of all behaviors: 
+        [
+            "behavior1", 
+            "behavior2",
+            ...
+        ]
+        '''
+        cur_dir = os.path.dirname(os.path.abspath(__file__))
+        full_path = os.path.join(cur_dir, path)
+        with open(full_path, 'r') as f:
+            behaviors = json.load(f)
+
+        self.behavior_idx_map = {behavior['name']: idx for idx, behavior in enumerate(behaviors)}
+        self.categories = [behavior['name'] for behavior in behaviors]
+
+    def __iter__(self):
+        for sample in self.data: 
+            image, annotation = sample
+            if self.img_transform:
+                image = self.img_transform(image)
+
+            behaviors = []
+            for event in annotation['events']:
+                behaviors.append(event['behavior']['name'])
+
+            labels = [self.behavior_idx_map[behavior] for behavior in behaviors]
+            yield image, labels
+

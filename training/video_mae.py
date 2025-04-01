@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 from transformers import AutoImageProcessor, VideoMAEForPreTraining, VideoMAEConfig
-from fish_benchmark.dataset import UCF101
+from fish_benchmark.data.dataset import UCF101
 from fish_benchmark.models import VideoMAEClassifier
 from pytorch_lightning.loggers import WandbLogger
 
