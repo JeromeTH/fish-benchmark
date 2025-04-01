@@ -36,7 +36,7 @@ def get_png_bytes(image: Image) -> bytes:
 
 def get_jpeg_bytes(image: Image) -> bytes:
     img_buffer = io.BytesIO()
-    image.save(img_buffer, format="JPEG", quality=95)
+    image.save(img_buffer, format="JPEG", quality=100)
     return img_buffer.getvalue()
 
 def convert_to_bytes(frame, label):
