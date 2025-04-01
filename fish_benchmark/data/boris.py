@@ -41,7 +41,7 @@ class Metadata(BaseModel):
     media_duration: float
     time_offset: float 
 
-class MediaAnnotation:
+class BorisAnnotation:
     '''
     A BORIS annotated video and related conversion methods.
     '''

@@ -3,7 +3,7 @@ Preprocess the annotations to frame and label pairs. frames are stored as pngs, 
 every 1000 frames are stored in as a shard using a tar file. This is then loaded using the webdataset module. 
 '''
 import os
-from fish_benchmark.data.preprocess import MediaAnnotation
+from fish_benchmark.data.boris import BorisAnnotation
 import json
 from tqdm import tqdm
 import tarfile
@@ -113,7 +113,7 @@ class BatchShardWriter:
 
 if __name__ == '__main__':
     for video_path, annotation_path in zip(video_paths, annotation_paths):
-        annotation = MediaAnnotation(annotation_path)
+        annotation = BorisAnnotation(annotation_path)
         annotation.load_video(video_path)
         video_name = annotation.metadata.observation_id
         shard_writer = BatchShardWriter(video_name, output_path, batch_size=100, save_as_tar=True)

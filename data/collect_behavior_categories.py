@@ -1,4 +1,4 @@
-from fish_benchmark.data.preprocess import MediaAnnotation
+from fish_benchmark.data.boris import BorisAnnotation
 import json
 import os
 annotation_paths = ['/share/j_sun/jth264/sample_fish_data/JGL_DaaiBoui_SR_070723_GH030275.csv']
@@ -6,7 +6,7 @@ output_path = './fish_benchmark/data'
 if __name__ == '__main__':
     behaviors = []
     for path in annotation_paths:
-        annotation = MediaAnnotation(path)
+        annotation = BorisAnnotation(path)
         behaviors.extend(annotation.behaviors)
     
     unique_behaviors = list(set(behaviors))
