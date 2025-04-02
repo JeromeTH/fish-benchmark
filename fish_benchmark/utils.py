@@ -82,6 +82,14 @@ def load_fish_data(path, augs, train=True):
     )
     return dataset
 
+def get_files_of_type(folder_path, file_type):
+    res = []
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if file.lower().endswith(file_type):
+                res.append(os.path.join(root, file))
+    return res
+
 import heapq
 
 class PriorityQueue:

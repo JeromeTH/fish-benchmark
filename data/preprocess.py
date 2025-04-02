@@ -16,14 +16,42 @@ import time
 import threading
 import psutil
 from multiprocessing import Pool, cpu_count
+from fish_benchmark.utils import get_files_of_type
+import re
+import logging
 
 
-data_path = "/share/j_sun/jth264/sample_fish_data"
-video_paths = [os.path.join(data_path, "GH030275_stab.MP4")]
-annotation_paths  = [os.path.join(data_path, "JGL_DaaiBoui_SR_070723_GH030275.csv")]
-#mkdir "training" under datapath
-os.makedirs(os.path.join(data_path, "training"), exist_ok=True)
-output_path = os.path.join(data_path, "training")
+data_path = "/share/j_sun/jth264/bites_training_data"
+OUTPUT_PATH = "/share/j_sun/jth264/bites_frame_annotation"
+video_paths = get_files_of_type(data_path, ".mp4")
+annotation_paths = get_files_of_type(data_path, ".csv")
+if not os.path.exists(OUTPUT_PATH):
+    os.makedirs(OUTPUT_PATH)
+
+# Set up logging
+logger = logging.getLogger('preprocess_logger')
+logger.setLevel(logging.DEBUG) 
+file_handler = logging.FileHandler('./logs/output/preprocess.log')
+file_handler.setLevel(logging.INFO)  # Set the level for file handler
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+def extract_annotation_identifier(filename):
+    """Extracts the annotation identifier from the filename."""
+    match = re.search(r'.*_([^_]*)\.csv$', filename)
+    return match.group(1) if match else None
+
+def extract_video_identifier(file_path):
+    # Extract the filename (part after the last slash)
+    filename = os.path.basename(file_path)
+    
+    # If there's an underscore, extract everything before it
+    if '_' in filename:
+        return filename.split('_')[0]
+    
+    # If there's no underscore, return the filename without extension
+    return os.path.splitext(filename)[0]
 
 def frame_id_with_padding(id):
     # Pad the frame ID with leading zeros to make it 6 digits
@@ -112,11 +140,21 @@ class BatchShardWriter:
 
 
 if __name__ == '__main__':
-    for video_path, annotation_path in zip(video_paths, annotation_paths):
+    id_video_map = {extract_video_identifier(video_path): video_path for video_path in video_paths}
+    id_annotation_map = {extract_annotation_identifier(annotation_path): annotation_path for annotation_path in annotation_paths}
+
+    for id in id_video_map.keys():
+        if id not in id_annotation_map:
+            logger.warning(f"Video {id} does not have a corresponding annotation file.")
+            continue
+        logger.info(f"Processing video {id} with annotation file {id_annotation_map[id]}")
+        video_path = id_video_map[id]
+        annotation_path = id_annotation_map[id]
+
         annotation = BorisAnnotation(annotation_path)
         annotation.load_video(video_path)
         video_name = annotation.metadata.observation_id
-        shard_writer = BatchShardWriter(video_name, output_path, batch_size=100, save_as_tar=True)
+        shard_writer = BatchShardWriter(video_name, OUTPUT_PATH, batch_size=100, save_as_tar=True)
         for frame, label in tqdm(annotation.stream_frame_annotations(), total=annotation.frame_count, desc=f"Processing {video_name}", leave=False):
             #save PIL image frame as png 
             frame_id = frame_id_with_padding(label['frame_id'])
