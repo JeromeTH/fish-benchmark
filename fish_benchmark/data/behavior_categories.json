@@ -1,16 +1,31 @@
 [
     {
-        "name": "Cleaner wrasse",
+        "name": "Other behavior",
+        "category": "Not defined",
+        "type": "POINT"
+    },
+    {
+        "name": "Medium bites",
+        "category": "Not defined",
+        "type": "POINT"
+    },
+    {
+        "name": "High bites",
+        "category": "Not defined",
+        "type": "POINT"
+    },
+    {
+        "name": "Traversing/swimming",
         "category": "Prolonged activity",
         "type": "STATE"
     },
     {
-        "name": "Rubble habitat",
-        "category": "Habitat",
-        "type": "STATE"
+        "name": "Departure",
+        "category": "Not defined",
+        "type": "POINT"
     },
     {
-        "name": "Traversing/swimming",
+        "name": "Cleaner wrasse",
         "category": "Prolonged activity",
         "type": "STATE"
     },
@@ -20,9 +35,24 @@
         "type": "POINT"
     },
     {
-        "name": "Coral habitat",
-        "category": "Habitat",
+        "name": "Change in Focal Fish",
+        "category": "Not defined",
+        "type": "POINT"
+    },
+    {
+        "name": "Solo foraging/swimming",
+        "category": "Social state",
         "type": "STATE"
+    },
+    {
+        "name": "Seafloor bites",
+        "category": "Not defined",
+        "type": "POINT"
+    },
+    {
+        "name": "Aggressive on focal",
+        "category": "Not defined",
+        "type": "POINT"
     },
     {
         "name": "Social foraging/swimming",
@@ -30,9 +60,9 @@
         "type": "STATE"
     },
     {
-        "name": "Solo foraging/swimming",
-        "category": "Social state",
-        "type": "STATE"
+        "name": "Sand rubbing",
+        "category": "Not defined",
+        "type": "POINT"
     },
     {
         "name": "Not visible",
@@ -45,18 +75,28 @@
         "type": "STATE"
     },
     {
-        "name": "Seafloor bites",
+        "name": "Idle",
+        "category": "Prolonged activity",
+        "type": "STATE"
+    },
+    {
+        "name": "Coral habitat",
+        "category": "Habitat",
+        "type": "STATE"
+    },
+    {
+        "name": "Rubble habitat",
+        "category": "Habitat",
+        "type": "STATE"
+    },
+    {
+        "name": "Aggressive by focal",
         "category": "Not defined",
         "type": "POINT"
     },
     {
-        "name": "Departure",
-        "category": "Not defined",
-        "type": "POINT"
-    },
-    {
-        "name": "Sand rubbing",
-        "category": "Not defined",
-        "type": "POINT"
+        "name": "Sand habitat",
+        "category": "Habitat",
+        "type": "STATE"
     }
 ]

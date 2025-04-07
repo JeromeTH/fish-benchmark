@@ -11,8 +11,8 @@ import wandb
 
 PRETRAINED_MODEL = 'clip'
 CLASSIFIER = 'linear'
-DATA_PATH = '.'
-DATASET = 'Caltech101'
+DATA_PATH = '/share/j_sun/jth264/bites_frame_annotation'
+DATASET = 'HeinFishBehavior'
 
 available_gpus = torch.cuda.device_count()
 print(f"Available GPUs: {available_gpus}")
@@ -34,11 +34,11 @@ if __name__ == '__main__':
         print("Loading data...")
         processor = get_processor(PRETRAINED_MODEL)
         image_transform = lambda img: processor(images = img, return_tensors="pt").pixel_values.squeeze(0)
-        train_dataset = get_dataset(DATASET, DATA_PATH, augs =image_transform, train = True)
+        train_dataset = get_dataset(DATASET, DATA_PATH, augs =image_transform, train=True)
         test_dataset = get_dataset(DATASET, DATA_PATH, augs = image_transform, train=False)
         print("Data loaded.")
-        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], shuffle=True)
-        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'], shuffle=False)
+        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'])
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'])
         
         model = ImageClassifier(
             num_classes=len(train_dataset.categories), 

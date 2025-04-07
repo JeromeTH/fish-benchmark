@@ -141,7 +141,9 @@ class HeinFishBehavior(IterableDataset):
                 behaviors.append(event['behavior']['name'])
 
             labels = [self.behavior_idx_map[behavior] for behavior in behaviors]
-            yield image, labels
+            one_hot = torch.zeros(len(self.categories), dtype=torch.float32)
+            one_hot[labels] = 1
+            yield image, one_hot
 
 def get_dataset(dataset_name, path, augs=None, train=True):
     if dataset_name == 'UCF101':
