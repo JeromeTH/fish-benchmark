@@ -168,10 +168,12 @@ class HeinFishBehavior(IterableDataset):
                 behaviors.append(event['behavior']['name'])
 
             labels = [self.behavior_idx_map[behavior] for behavior in behaviors]
-            if self.label_type == 'one_hot':
+            if self.label_type == 'onehot':
                 yield image, onehot(len(self.categories), labels)
-            else: 
+            elif self.label_type == 'categorical': 
                 yield image, torch.tensor(labels)
+            else:
+                raise ValueError(f"label_type {self.label_type} not recognized.")
 
 def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"):
     if dataset_name == 'UCF101':

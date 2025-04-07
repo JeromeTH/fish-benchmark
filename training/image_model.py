@@ -11,9 +11,9 @@ import wandb
 
 PRETRAINED_MODEL = 'dino'
 CLASSIFIER = 'linear'
-DATA_PATH = '.'
-DATASET = 'Caltech101'
-LABEL_TYPE = 'categorical'
+DATA_PATH = '/share/j_sun/jth264/bites_frame_annotation'
+DATASET = 'HeinFishBehavior'
+LABEL_TYPE = 'onehot'
 
 available_gpus = torch.cuda.device_count()
 print(f"Available GPUs: {available_gpus}")
@@ -50,9 +50,6 @@ if __name__ == '__main__':
 
         lit_module = get_lit_module(model, learning_rate=run.config['learning_rate'], label_type=LABEL_TYPE)
         trainer = L.Trainer(max_epochs=5, logger=wandb_logger)
-        #train the model
         trainer.fit(lit_module, train_dataloader)
-        #evaluate the model
         trainer.test(lit_module, test_dataloader)
-        #save the model
         trainer.save_checkpoint(f"{PRETRAINED_MODEL}_model.ckpt")
