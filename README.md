@@ -8,6 +8,7 @@ This project implements video classification benchmarks for fish behavior using 
 ./fish_benchmark   # Model, Dataset definitions and demo pipeline
 ./training         # Scripts for training each model
 ./demo            # Scripts for running model demos
+./data #Scripts to acquire data from Google Drive and preprocess them into frame level annotations
 ```
 
 ## Installation
@@ -21,14 +22,18 @@ conda activate benchmark
 ## Usage
 
 ### 1. Training Models
-Each model can be trained using the corresponding script in the `./training` directory. For example:
+Each model can be trained using the corresponding script in the `./training` directory.  
+
+Adjust the configurations on top of each file.  
+If each frame has multiple labels, then only use LABEL_TYPE = "onehot"  
+If each frame has one label, then both  LABEL_TYPE = "onehot" and LABEL_TYPE = "categorical" would work  
+For example:
 
 ```bash
-python ./training/video_mae.py  # Train VideoMAE
-python ./training/dino.py      # Train DINO
-python ./training/clip.py      # Train CLIP
+cd <project home directory>
+python training/video_model.py
+python training/image_model.py
 ```
-Modify hyperparameters in the script
 
 ### 2. Running Model Demos
 To test the models on sample videos, use the scripts in the `./demo` directory:
