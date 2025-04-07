@@ -21,10 +21,12 @@ import re
 import logging
 
 
-data_path = "/share/j_sun/jth264/bites_training_data"
+DATA_PATH = "/share/j_sun/jth264/bites_training_data"
 OUTPUT_PATH = "/share/j_sun/jth264/bites_frame_annotation"
-video_paths = get_files_of_type(data_path, ".mp4")
-annotation_paths = get_files_of_type(data_path, ".csv")
+SHARD_SIZE = 1000
+
+video_paths = get_files_of_type(DATA_PATH, ".mp4")
+annotation_paths = get_files_of_type(DATA_PATH, ".csv")
 if not os.path.exists(OUTPUT_PATH):
     os.makedirs(OUTPUT_PATH)
 
@@ -55,7 +57,7 @@ def extract_video_identifier(file_path):
 
 def frame_id_with_padding(id):
     # Pad the frame ID with leading zeros to make it 6 digits
-    return str(id).zfill(6)
+    return str(id).zfill(8)
 
 def get_png_bytes(image: Image) -> bytes:
     img_buffer = io.BytesIO()
@@ -142,22 +144,28 @@ class BatchShardWriter:
 if __name__ == '__main__':
     id_video_map = {extract_video_identifier(video_path): video_path for video_path in video_paths}
     id_annotation_map = {extract_annotation_identifier(annotation_path): annotation_path for annotation_path in annotation_paths}
+    logger.info(f"Found {len(id_video_map)} video files and {len(id_annotation_map)} annotation files.")
+    logger.info(f"Video files: {list(id_video_map.keys())}")
+    logger.info(f"Annotation files: {list(id_annotation_map.keys())}")
 
     for id in id_video_map.keys():
         if id not in id_annotation_map:
             logger.warning(f"Video {id} does not have a corresponding annotation file.")
             continue
-        logger.info(f"Processing video {id} with annotation file {id_annotation_map[id]}")
-        video_path = id_video_map[id]
-        annotation_path = id_annotation_map[id]
+        try:
+            logger.info(f"Processing video {id} with annotation file {id_annotation_map[id]}")
+            video_path = id_video_map[id]
+            annotation_path = id_annotation_map[id]
 
-        annotation = BorisAnnotation(annotation_path)
-        annotation.load_video(video_path)
-        video_name = annotation.metadata.observation_id
-        shard_writer = BatchShardWriter(video_name, OUTPUT_PATH, batch_size=100, save_as_tar=True)
-        for frame, label in tqdm(annotation.stream_frame_annotations(), total=annotation.frame_count, desc=f"Processing {video_name}", leave=False):
-            #save PIL image frame as png 
-            frame_id = frame_id_with_padding(label['frame_id'])
-            base_name = f"{video_name}_{frame_id}"
-            shard_writer.add(frame_id, f"{base_name}.png", frame, f"{base_name}.json", label)
-        shard_writer.flush()
+            annotation = BorisAnnotation(annotation_path)
+            annotation.load_video(video_path)
+            video_name = annotation.metadata.observation_id
+            shard_writer = BatchShardWriter(video_name, OUTPUT_PATH, batch_size=SHARD_SIZE, save_as_tar=True)
+            for frame, label in tqdm(annotation.stream_frame_annotations(), total=annotation.frame_count, desc=f"Processing {video_name}", leave=False):
+                #save PIL image frame as png 
+                frame_id = frame_id_with_padding(label['frame_id'])
+                base_name = f"{video_name}_{frame_id}"
+                shard_writer.add(frame_id, f"{base_name}.png", frame, f"{base_name}.json", label)
+            shard_writer.flush()
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred during processing of video {id}")

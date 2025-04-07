@@ -4,7 +4,6 @@ In this file, we want to train the video MAE model for video classification with
 import torch
 import lightning as L
 from transformers import AutoImageProcessor
-from fish_benchmark.models import DINOImageClassifier
 from fish_benchmark.utils import load_caltech101
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -51,15 +50,15 @@ if __name__ == '__main__':
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], shuffle=True)
         test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'], shuffle=False)
 
-        model = DINOImageClassifier(
-            num_classes=len(train_dataset.categories), 
-            learning_rate=run.config['learning_rate']
-        )
+        # model = DINOImageClassifier(
+        #     num_classes=len(train_dataset.categories), 
+        #     learning_rate=run.config['learning_rate']
+        # )
         
-        trainer = L.Trainer(max_epochs=run.config['epochs'], logger=wandb_logger) #removed callbacks=[checkpoint_callback]
-        #train the model
-        trainer.fit(model, train_dataloader)
-        #evaluate the model
-        trainer.test(model, test_dataloader)
-        #save the model
-        trainer.save_checkpoint("dino_model.ckpt")
+        # trainer = L.Trainer(max_epochs=run.config['epochs'], logger=wandb_logger) #removed callbacks=[checkpoint_callback]
+        # #train the model
+        # trainer.fit(model, train_dataloader)
+        # #evaluate the model
+        # trainer.test(model, test_dataloader)
+        # #save the model
+        # trainer.save_checkpoint("dino_model.ckpt")

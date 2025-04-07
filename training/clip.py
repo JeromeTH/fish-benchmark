@@ -9,7 +9,6 @@ from fish_benchmark.utils import load_caltech101
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 
-data_path = '/share/j_sun/jth264/UCF101_subset'
 available_gpus = torch.cuda.device_count()
 print(f"Available GPUs: {available_gpus}")
 project = "clip_training"

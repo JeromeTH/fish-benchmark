@@ -35,7 +35,7 @@ class Metadata(BaseModel):
     '''
     observation_id: str
     observation_date: str
-    observation_type: str
+    # observation_type: str
     source: str
     fps: float
     media_duration: float
@@ -67,7 +67,7 @@ class BorisAnnotation:
         metadata = Metadata(
             observation_id=df['observation_id'][0],
             observation_date=df['observation_date'][0],
-            observation_type=df['observation_type'][0],
+            # observation_type=df['observation_type'][0], observation type is sometimes missing, however, it's not used
             source=df['source'][0],
             fps=df['fps_(frame/s)'][0],
             media_duration=df['media_duration_(s)'][0],
