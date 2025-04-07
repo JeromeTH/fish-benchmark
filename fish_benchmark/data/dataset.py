@@ -17,6 +17,14 @@ class BaseCategoricalDataset(Dataset):
     def categories(self):
         pass
 
+def onehot(num_total_classes, active_classes):
+    """
+    Convert a list of class indices to one-hot encoding.
+    """
+    one_hot = torch.zeros(num_total_classes, dtype=torch.float32)
+    one_hot[active_classes] = 1
+    return one_hot
+
 class UCF101(BaseCategoricalDataset):
     '''
     Each data entry should contain 16 frames and a label. The 16 frames are sampled from the video.
@@ -29,11 +37,13 @@ class UCF101(BaseCategoricalDataset):
             ├── class2/
             │
     '''
-    def __init__(self, data_path, train= True, clip_len = 16, transform=None, load_data = True):
+    def __init__(self, data_path, train= True, clip_len = 16, transform=None, load_data = True, label_type = "class_idx"):
+        super().__init__()
         self.data_path = data_path
         self.train = train
         self.transform = transform
         self.clip_len = clip_len
+        self.label_type = label_type
         # Step 1: Precompute a fixed, sorted class list
         train_classes = sorted([d for d in os.listdir(os.path.join(data_path, 'train')) if os.path.isdir(os.path.join(data_path, 'train', d))])
         test_classes = sorted([d for d in os.listdir(os.path.join(data_path, 'test')) if os.path.isdir(os.path.join(data_path, 'test', d))])
@@ -73,13 +83,21 @@ class UCF101(BaseCategoricalDataset):
     def __getitem__(self, idx):
         #preprocess the data using transform
         if self.transform:
-            return self.transform(self.data[idx]), self.labels[idx]
-        else: 
-            return self.data[idx], self.labels[idx]
-
+            d = self.transform(self.data[idx])
+        
+        if self.label_type == "onehot":
+            return d, onehot(len(self.categories), self.labels[idx])
+        elif self.label_type == "class_idx":
+            return d, self.labels[idx]
+        else:
+            raise ValueError(f"label_type {self.label_type} not recognized.")
+        
 class CalTech101WithSplit(Dataset):
-    def __init__(self, path, train=True, transform=None):
+    def __init__(self, path, train=True, transform=None, label_type = "class_idx"):
         dataset = Caltech101(root=path, target_type = "category", transform= transform, download=True)
+        '''
+        label_type = "class_idx" or "onehot"
+        '''
         # print(dataset.categories)
         #generate random indices to be the training set * 0.8, will split using SubSet later to be the training set 
         random_perm = torch.randperm(len(dataset))
@@ -92,6 +110,7 @@ class CalTech101WithSplit(Dataset):
         res.categories = dataset.categories
         res.transform = transform
         self.data = res
+        self.label_type = label_type
 
     @property
     def categories(self):
@@ -101,16 +120,23 @@ class CalTech101WithSplit(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        return self.data[idx]
+        if self.label_type == "onehot":
+            # Convert the label to one-hot encoding
+            return self.data[idx][0], onehot(len(self.categories), self.data[idx][1])
+        elif self.label_type == "class_idx":
+            return self.data[idx]
+        else:
+            raise ValueError(f"label_type {self.label_type} not recognized.")
 
 
 class HeinFishBehavior(IterableDataset):
-    def __init__(self, tar_files, img_transform=None, label_transform=None):
+    def __init__(self, tar_files, img_transform=None, label_transform=None, label_type = "onehot"):
         super().__init__()
         self.tar_files = tar_files
         self.data = wds.WebDataset(tar_files, shardshuffle=False).decode("pil").to_tuple("png", "json")
         self.img_transform = img_transform
         self.label_transform = label_transform
+        self.label_type = label_type
         self.load_behavior_idx_map('behavior_categories.json')
 
     def load_behavior_idx_map(self, path):
@@ -141,18 +167,19 @@ class HeinFishBehavior(IterableDataset):
                 behaviors.append(event['behavior']['name'])
 
             labels = [self.behavior_idx_map[behavior] for behavior in behaviors]
-            one_hot = torch.zeros(len(self.categories), dtype=torch.float32)
-            one_hot[labels] = 1
-            yield image, one_hot
+            if self.label_type == 'one_hot':
+                yield image, onehot(len(self.categories), labels)
+            else: 
+                yield image, torch.tensor(labels)
 
-def get_dataset(dataset_name, path, augs=None, train=True):
+def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"):
     if dataset_name == 'UCF101':
-        dataset = UCF101(path, train=train, transform=augs)
+        dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'Caltech101':
-        dataset = CalTech101WithSplit(path, train=train, transform=augs)
+        dataset = CalTech101WithSplit(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'HeinFishBehavior':
         tar_files = [os.path.join(path, tarfile) for tarfile in os.listdir(path)]
-        dataset = HeinFishBehavior(tar_files, img_transform=augs)
+        dataset = HeinFishBehavior(tar_files, img_transform=augs, label_type=label_type)
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
     return dataset
