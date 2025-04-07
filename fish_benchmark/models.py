@@ -63,12 +63,15 @@ def get_processor(model_name):
         raise ValueError(f"Unknown model name: {model_name}")
     
 class VideoClassifier(nn.Module):
-    def __init__(self, num_classes, learning_rate=1e-4, pretrained_model = 'videomae', classifier_type='mlp'):
-        super().__init__(learning_rate)
+    def __init__(self, num_classes, pretrained_model = 'videomae', classifier_type='mlp', freeze_pretrained=True):
+        super().__init__()
         self.model = get_pretrained_video_model(pretrained_model) 
         self.hidden_size = self.model.config.hidden_size
         self.num_classes = num_classes
         self.classifier = get_classifier(self.hidden_size, num_classes, classifier_type)
+        if freeze_pretrained:
+            for param in self.model.parameters():
+                param.requires_grad = False
 
     def forward(self, x):
         last_hidden_state = self.model(x).last_hidden_state

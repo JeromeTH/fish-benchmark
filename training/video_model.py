@@ -1,22 +1,18 @@
-'''
-In this file, we want to train the video MAE model for video classification with pytorch lighning module
-'''
 import torch
 import lightning as L
-from fish_benchmark.models import get_processor, ImageClassifier
+from fish_benchmark.models import get_processor, VideoClassifier
 from fish_benchmark.data.dataset import get_dataset
 from fish_benchmark.litmodule import get_lit_module
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 
-PRETRAINED_MODEL = 'dino'
+
+PRETRAINED_MODEL = 'videomae'
 CLASSIFIER = 'linear'
-DATA_PATH = '.'
-DATASET = 'Caltech101'
+DATA_PATH = '/share/j_sun/jth264/UCF101_subset'
+DATASET = 'UCF101'
 LABEL_TYPE = 'categorical'
 
-available_gpus = torch.cuda.device_count()
-print(f"Available GPUs: {available_gpus}")
 project = f"{PRETRAINED_MODEL}_training"
 
 if __name__ == '__main__':
@@ -34,14 +30,14 @@ if __name__ == '__main__':
         )
         print("Loading data...")
         processor = get_processor(PRETRAINED_MODEL)
-        image_transform = lambda img: processor(images = img, return_tensors="pt").pixel_values.squeeze(0)
-        train_dataset = get_dataset(DATASET, DATA_PATH, augs =image_transform, train=True, label_type=LABEL_TYPE)
-        test_dataset = get_dataset(DATASET, DATA_PATH, augs = image_transform, train=False, label_type=LABEL_TYPE)
+        video_transform = lambda video: processor(list(video), return_tensors="pt").pixel_values.squeeze(0)
+        train_dataset = get_dataset(DATASET, DATA_PATH, augs =video_transform, train=True, label_type=LABEL_TYPE)
+        test_dataset = get_dataset(DATASET, DATA_PATH, augs = video_transform, train=False, label_type=LABEL_TYPE)
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'])
         test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'])
         
-        model = ImageClassifier(
+        model = VideoClassifier(
             num_classes=len(train_dataset.categories), 
             pretrained_model=PRETRAINED_MODEL,
             classifier_type=CLASSIFIER, 

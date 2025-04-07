@@ -37,7 +37,7 @@ class UCF101(BaseCategoricalDataset):
             ├── class2/
             │
     '''
-    def __init__(self, data_path, train= True, clip_len = 16, transform=None, load_data = True, label_type = "class_idx"):
+    def __init__(self, data_path, train= True, clip_len = 16, transform=None, load_data = True, label_type = "categorical"):
         super().__init__()
         self.data_path = data_path
         self.train = train
@@ -73,6 +73,7 @@ class UCF101(BaseCategoricalDataset):
                 if not os.path.isfile(video_path): continue
                 container = av.open(video_path)
                 indices = sample_frame_indices(clip_len=self.clip_len, frame_sample_rate=1, seg_len=container.streams.video[0].frames)
+                print(indices)
                 video = read_video_pyav(container, indices)
                 self.data.append(video)
                 self.labels.append(class_idx)
@@ -87,16 +88,16 @@ class UCF101(BaseCategoricalDataset):
         
         if self.label_type == "onehot":
             return d, onehot(len(self.categories), self.labels[idx])
-        elif self.label_type == "class_idx":
+        elif self.label_type == "categorical":
             return d, self.labels[idx]
         else:
             raise ValueError(f"label_type {self.label_type} not recognized.")
         
 class CalTech101WithSplit(Dataset):
-    def __init__(self, path, train=True, transform=None, label_type = "class_idx"):
+    def __init__(self, path, train=True, transform=None, label_type = "categorical"):
         dataset = Caltech101(root=path, target_type = "category", transform= transform, download=True)
         '''
-        label_type = "class_idx" or "onehot"
+        label_type = "categorical" or "onehot"
         '''
         # print(dataset.categories)
         #generate random indices to be the training set * 0.8, will split using SubSet later to be the training set 
@@ -123,7 +124,7 @@ class CalTech101WithSplit(Dataset):
         if self.label_type == "onehot":
             # Convert the label to one-hot encoding
             return self.data[idx][0], onehot(len(self.categories), self.data[idx][1])
-        elif self.label_type == "class_idx":
+        elif self.label_type == "categorical":
             return self.data[idx]
         else:
             raise ValueError(f"label_type {self.label_type} not recognized.")
