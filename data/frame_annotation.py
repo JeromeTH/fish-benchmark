@@ -16,17 +16,16 @@ import time
 import threading
 import psutil
 from multiprocessing import Pool, cpu_count
-from fish_benchmark.utils import get_files_of_type
+from fish_benchmark.utils import get_files_of_type, extract_video_identifier, extract_annotation_identifier
 import re
 import logging
 
 
 DATA_PATH = "/share/j_sun/jth264/bites_training_data"
+PREDEFINED_TARGET_IDS = None
 OUTPUT_PATH = "/share/j_sun/jth264/bites_frame_annotation"
 SHARD_SIZE = 1000
 
-video_paths = get_files_of_type(DATA_PATH, ".mp4")
-annotation_paths = get_files_of_type(DATA_PATH, ".csv")
 if not os.path.exists(OUTPUT_PATH):
     os.makedirs(OUTPUT_PATH)
 
@@ -38,22 +37,6 @@ file_handler.setLevel(logging.INFO)  # Set the level for file handler
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
-
-def extract_annotation_identifier(filename):
-    """Extracts the annotation identifier from the filename."""
-    match = re.search(r'.*_([^_]*)\.csv$', filename)
-    return match.group(1) if match else None
-
-def extract_video_identifier(file_path):
-    # Extract the filename (part after the last slash)
-    filename = os.path.basename(file_path)
-    
-    # If there's an underscore, extract everything before it
-    if '_' in filename:
-        return filename.split('_')[0]
-    
-    # If there's no underscore, return the filename without extension
-    return os.path.splitext(filename)[0]
 
 def frame_id_with_padding(id):
     # Pad the frame ID with leading zeros to make it 6 digits
@@ -141,16 +124,33 @@ class BatchShardWriter:
         self.batch.frame_ids.clear()
 
 
+def load_special_ids(file_path):
+    if file_path is None:
+        return None
+    with open(file_path, 'r') as f:
+        lines = f.readlines()
+    special_ids = []
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith('#'):  # Ignore empty lines and comments
+            special_ids.append(line)
+        
+    return special_ids
+
 if __name__ == '__main__':
+    video_paths = get_files_of_type(DATA_PATH, ".mp4")
+    annotation_paths = get_files_of_type(DATA_PATH, ".csv")
     id_video_map = {extract_video_identifier(video_path): video_path for video_path in video_paths}
     id_annotation_map = {extract_annotation_identifier(annotation_path): annotation_path for annotation_path in annotation_paths}
     logger.info(f"Found {len(id_video_map)} video files and {len(id_annotation_map)} annotation files.")
     logger.info(f"Video files: {list(id_video_map.keys())}")
     logger.info(f"Annotation files: {list(id_annotation_map.keys())}")
-
+    special_ids = load_special_ids(PREDEFINED_TARGET_IDS)
     for id in id_video_map.keys():
+        if special_ids is not None and id not in special_ids:
+            continue
         if id not in id_annotation_map:
-            logger.warning(f"Video {id} does not have a corresponding annotation file.")
+            logger.warning(f"Annotation file not found for video {id}. Skipping.")
             continue
         try:
             logger.info(f"Processing video {id} with annotation file {id_annotation_map[id]}")

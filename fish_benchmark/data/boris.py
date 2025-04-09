@@ -6,110 +6,87 @@ import av
 import os
 import numpy as np
 from fish_benchmark.utils import PriorityQueue
+from fish_benchmark.data.schemas import Behavior, Event, Metadata
 
-class Behavior(BaseModel):
-    '''
-    A behavior in the BORIS annotation format.
-    '''
-    name: str
-    category: str
-    type: str
-    def __hash__(self):
-        return hash((self.category, self.name, self.type))
+BORIS_NAME_TO_METADATA = {
+    'observation_id': 'observation_id',
+    'observation_date': 'observation_date',
+    # 'observation_type': 'observation_type', observation type is sometimes missing, however, it's not used
+    'source': 'source',
+    'fps_(frame/s)': 'fps',
+    'media_duration_(s)': 'media_duration',
+    'time_offset_(s)': 'time_offset'
+}
 
-    def __eq__(self, other):
-        return isinstance(other, Behavior) and (self.name, self.category, self.type) == (other.name, other.category, other.type)
+BORIS_NAME_TO_EVENT = {
+    'start_(s)': 'start_time',
+    'stop_(s)': 'end_time',
+    'subject': 'subject',
+}
 
-    
-class Event(BaseModel):
-    start_time: float
-    end_time: float
-    start_frame: int
-    end_frame: int
-    behavior: Behavior
-    subject: str
+BORIS_NAME_TO_BEHAVIOR = {
+    'behavior': 'name',
+    'behavioral_category': 'category',
+    'behavior_type': 'type'
+}
 
-class Metadata(BaseModel):
+def read_df(annotation_path):
+    df = pd.read_csv(annotation_path)
+    df.columns = df.columns.str.replace(' ', '_').str.lower()
+    return df
+
+def parse_behaviors(df):
     '''
-    Metadata for a BORIS annotated video.
+    Load behaviors from a BORIS file.
     '''
-    observation_id: str
-    observation_date: str
-    # observation_type: str
-    source: str
-    fps: float
-    media_duration: float
-    time_offset: float 
+    behaviors = df.groupby([boris_col_name for boris_col_name in BORIS_NAME_TO_BEHAVIOR.keys()]).size().reset_index(name='count')
+    behavior_list = []
+    for _, row in behaviors.iterrows():
+        behavior_list.append(
+            Behavior(**{
+                    metadata_field: row[boris_col]
+                    for boris_col, metadata_field in BORIS_NAME_TO_BEHAVIOR.items()
+                })
+            )
+    return behavior_list
 
 class BorisAnnotation:
     '''
     A BORIS annotated video and related conversion methods.
     '''
     def __init__(self, annotation_path):
-        self.df = self.read_df(annotation_path)
-        self.metadata: Metadata = self.parse_metadata()
-        self.behaviors: List[Behavior] = self.parse_behaviors()
-        self.events: List[Event] = self.parse_events()
+        self.annotation_path = annotation_path
+        self.df = read_df(self.annotation_path)
+        self.metadata: Metadata = Metadata(**{
+            metadata_field: self.df[boris_col][0]
+            for boris_col, metadata_field in BORIS_NAME_TO_METADATA.items()
+        })
+        self.behaviors: List[Behavior] = parse_behaviors(self.df)
+        self.events: List[Event] = self.parse_events(self.df)
         self.annotation_path = None
         self.video_path = None
 
-    def read_df(self, annotation_path):
-        self.annotation_path = annotation_path
-        df = pd.read_csv(annotation_path)
-        df.columns = df.columns.str.replace(' ', '_').str.lower()
-        return df
-
-    def parse_metadata(self):
-        '''
-        Load metadata from a BORIS file.
-        '''
-        df = self.df
-        metadata = Metadata(
-            observation_id=df['observation_id'][0],
-            observation_date=df['observation_date'][0],
-            # observation_type=df['observation_type'][0], observation type is sometimes missing, however, it's not used
-            source=df['source'][0],
-            fps=df['fps_(frame/s)'][0],
-            media_duration=df['media_duration_(s)'][0],
-            time_offset=df['time_offset_(s)'][0]
-        )
-        return metadata
-
-    def parse_behaviors(self):
-        '''
-        Load behaviors from a BORIS file.
-        '''
-        df = self.df
-        behaviors = df.groupby(['behavior', 'behavioral_category', 'behavior_type']).size().reset_index(name='count')
-        behavior_list = []
-        for _, row in behaviors.iterrows():
-            behavior=Behavior(
-                    name=row['behavior'],
-                    category=row['behavioral_category'],
-                    type=row['behavior_type']
-                )
-            behavior_list.append(behavior)
-        return behavior_list
-
-    def parse_events(self):
+    def parse_events(self, df):
         '''
         Load events from a BORIS file.
         '''
-        df = self.df
         events = []
         for _, row in df.iterrows():
-            event = Event(
-                start_time=row['start_(s)'],
-                end_time=row['stop_(s)'],
-                start_frame=self.to_frame(row['start_(s)']),
-                end_frame=self.to_frame(row['stop_(s)']),
-                behavior=Behavior(
-                    name=row['behavior'],
-                    category=row['behavioral_category'],
-                    type=row['behavior_type']
-                ),
-                subject=row['subject']
-            )
+            event_kwargs = {
+                event_field: row[boris_col]
+                for boris_col, event_field in BORIS_NAME_TO_EVENT.items()
+            }
+
+            event_kwargs.update({
+                'behavior': Behavior(**{
+                    metadata_field: row[boris_col]
+                    for boris_col, metadata_field in BORIS_NAME_TO_BEHAVIOR.items()
+                }),
+                'start_frame': self.to_frame(row['start_(s)']),
+                'end_frame': self.to_frame(row['stop_(s)'])
+            })
+
+            event = Event(**event_kwargs)
             events.append(event)
         return events
 

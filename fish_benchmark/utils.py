@@ -5,6 +5,7 @@ import torch
 import os
 import webdataset as wds
 import json
+import re
 
 def read_video_pyav(container, indices):
     '''
@@ -89,6 +90,22 @@ def get_files_of_type(folder_path, file_type):
             if file.lower().endswith(file_type):
                 res.append(os.path.join(root, file))
     return res
+
+def extract_annotation_identifier(filename):
+    """Extracts the annotation identifier from the filename."""
+    match = re.search(r'.*_([^_]*)\.csv$', filename)
+    return match.group(1) if match else None
+
+def extract_video_identifier(file_path):
+    # Extract the filename (part after the last slash)
+    filename = os.path.basename(file_path)
+    
+    # If there's an underscore, extract everything before it
+    if '_' in filename:
+        return filename.split('_')[0]
+    
+    # If there's no underscore, return the filename without extension
+    return os.path.splitext(filename)[0]
 
 import heapq
 
