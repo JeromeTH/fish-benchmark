@@ -131,12 +131,11 @@ class CalTech101WithSplit(Dataset):
 
 
 class HeinFishBehavior(IterableDataset):
-    def __init__(self, tar_files, img_transform=None, label_transform=None, label_type = "onehot"):
+    def __init__(self, tar_files, img_transform=None, label_type = "onehot"):
         super().__init__()
         self.tar_files = tar_files
         self.data = wds.WebDataset(tar_files, shardshuffle=False).decode("pil").to_tuple("png", "json")
         self.img_transform = img_transform
-        self.label_transform = label_transform
         self.label_type = label_type
         self.load_behavior_idx_map('behavior_categories.json')
 
