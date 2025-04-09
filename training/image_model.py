@@ -3,18 +3,20 @@ In this file, we want to train the video MAE model for video classification with
 '''
 import torch
 import lightning as L
-from fish_benchmark.models import get_processor, ImageClassifier
+from fish_benchmark.models import get_input_transform, ImageClassifier
 from fish_benchmark.data.dataset import get_dataset
 from fish_benchmark.litmodule import get_lit_module
 from pytorch_lightning.loggers import WandbLogger
 import wandb
+import yaml
 
 PRETRAINED_MODEL = 'dino'
 CLASSIFIER = 'linear'
-DATA_PATH = '/share/j_sun/jth264/bites_frame_annotation'
+# DATA_PATH = '/share/j_sun/jth264/bites_frame_annotation'
 DATASET = 'HeinFishBehavior'
 LABEL_TYPE = 'onehot'
 
+config = yaml.safe_load(open('../configs/datasets.yml', 'r'))
 available_gpus = torch.cuda.device_count()
 print(f"Available GPUs: {available_gpus}")
 project = f"{PRETRAINED_MODEL}_training"
@@ -33,10 +35,8 @@ if __name__ == '__main__':
             log_model=True
         )
         print("Loading data...")
-        processor = get_processor(PRETRAINED_MODEL)
-        image_transform = lambda img: processor(images = img, return_tensors="pt").pixel_values.squeeze(0)
-        train_dataset = get_dataset(DATASET, DATA_PATH, augs =image_transform, train=True, label_type=LABEL_TYPE)
-        test_dataset = get_dataset(DATASET, DATA_PATH, augs = image_transform, train=False, label_type=LABEL_TYPE)
+        train_dataset = get_dataset(DATASET, config[DATASET]['path'], augs = get_input_transform(PRETRAINED_MODEL), train=True, label_type=LABEL_TYPE)
+        test_dataset = get_dataset(DATASET, config[DATASET]['path'], augs = get_input_transform(PRETRAINED_MODEL), train=False, label_type=LABEL_TYPE)
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'])
         test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'])

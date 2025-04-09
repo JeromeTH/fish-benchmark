@@ -52,13 +52,19 @@ def get_pretrained_video_model(model_name):
     else: 
         raise ValueError(f"Unknown model name: {model_name}")
 
-def get_processor(model_name):
+def get_input_transform(model_name):
     if model_name == 'clip':
-        return AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        transform = lambda img: processor(images=img, return_tensors="pt")['pixel_values']
+        return transform
     elif model_name == 'dino':
-        return AutoImageProcessor.from_pretrained('facebook/dinov2-base')
+        processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
+        transform = lambda img: processor(img, return_tensors="pt").pixel_values.squeeze(0)
+        return transform
     elif model_name == 'videomae':
-        return AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
+        processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
+        transform = lambda video: processor(list(video), return_tensors="pt").pixel_values.squeeze(0)
+        return transform
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     

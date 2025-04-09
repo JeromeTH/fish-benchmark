@@ -1,0 +1,6 @@
+videomae: 
+  type: video
+clip: 
+  type: image 
+dino: 
+  type: image

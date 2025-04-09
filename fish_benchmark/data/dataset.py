@@ -73,7 +73,6 @@ class UCF101(BaseCategoricalDataset):
                 if not os.path.isfile(video_path): continue
                 container = av.open(video_path)
                 indices = sample_frame_indices(clip_len=self.clip_len, frame_sample_rate=1, seg_len=container.streams.video[0].frames)
-                print(indices)
                 video = read_video_pyav(container, indices)
                 self.data.append(video)
                 self.labels.append(class_idx)

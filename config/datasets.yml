@@ -1,0 +1,20 @@
+UCF101:
+  path: /share/j_sun/jth264/UCF101_subset
+  precomputed_path: /share/j_sun/jth264/UCF101_precomputed
+  label_types: [categorical]
+  type: video
+  num_frames: 16
+  
+
+Caltech101: 
+  path: /share/j_sun/jth264/Caltech101
+  precomputed_path: /share/j_sun/jth264/Caltech101_precomputed
+  label_types: [categorical]
+  type: image
+
+HeinFishBehavior:
+  path: /share/j_sun/jth264/bites_frame_annotation
+  precomputed_path: /share/j_sun/jth264/bites_frame_annotation_precomputed
+  label_types: [onehot]
+  type: image
+
