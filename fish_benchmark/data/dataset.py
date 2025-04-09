@@ -10,6 +10,8 @@ from torch.utils.data import Subset
 import webdataset as wds
 import json
 from abc import ABC, abstractmethod
+from fish_benchmark.utils import get_files_of_type
+from queue import Queue 
 
 class BaseCategoricalDataset(Dataset):
     @property
@@ -129,16 +131,7 @@ class CalTech101WithSplit(Dataset):
             raise ValueError(f"label_type {self.label_type} not recognized.")
 
 
-class HeinFishBehavior(IterableDataset):
-    def __init__(self, tar_files, img_transform=None, label_type = "onehot"):
-        super().__init__()
-        self.tar_files = tar_files
-        self.data = wds.WebDataset(tar_files, shardshuffle=False).decode("pil").to_tuple("png", "json")
-        self.img_transform = img_transform
-        self.label_type = label_type
-        self.load_behavior_idx_map('behavior_categories.json')
-
-    def load_behavior_idx_map(self, path):
+def load_behavior_idx_map(path):
         '''
         json file containing the list of all behaviors: 
         [
@@ -152,8 +145,26 @@ class HeinFishBehavior(IterableDataset):
         with open(full_path, 'r') as f:
             behaviors = json.load(f)
 
-        self.behavior_idx_map = {behavior['name']: idx for idx, behavior in enumerate(behaviors)}
-        self.categories = [behavior['name'] for behavior in behaviors]
+        behavior_idx_map = {behavior['name']: idx for idx, behavior in enumerate(behaviors)}
+        return behavior_idx_map
+
+def parse_annotation(annotation):
+    behaviors = []
+    for event in annotation['events']:
+        behaviors.append(event['behavior']['name'])
+    return behaviors
+
+class HeinFishBehavior(IterableDataset):
+    def __init__(self, path, img_transform=None, label_type = "onehot"):
+        super().__init__()
+        self.path = path
+        tar_files = get_files_of_type(path, ".tar")
+        self.data = wds.WebDataset(tar_files, shardshuffle=False).decode("pil").to_tuple("png", "json")
+        self.img_transform = img_transform
+        self.label_type = label_type
+        self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
+        self.categories = list(self.behavior_idx_map.keys())
+
 
     def __iter__(self):
         for sample in self.data: 
@@ -161,11 +172,7 @@ class HeinFishBehavior(IterableDataset):
             if self.img_transform:
                 image = self.img_transform(image)
 
-            behaviors = []
-            for event in annotation['events']:
-                behaviors.append(event['behavior']['name'])
-
-            labels = [self.behavior_idx_map[behavior] for behavior in behaviors]
+            labels = [self.behavior_idx_map[behavior] for behavior in parse_annotation(annotation)]
             if self.label_type == 'onehot':
                 yield image, onehot(len(self.categories), labels)
             elif self.label_type == 'categorical': 
@@ -173,14 +180,50 @@ class HeinFishBehavior(IterableDataset):
             else:
                 raise ValueError(f"label_type {self.label_type} not recognized.")
 
+class HeinFishBehaviorSlidingWindow(IterableDataset):
+    def __init__(self, path, transform=None, label_type = "onehot", window_size=16):
+        super().__init__()
+        self.path = path
+        self.transform = transform
+        self.label_type = label_type
+        self.window_size = window_size
+        self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
+        self.categories = list(self.behavior_idx_map.keys())
+
+    def __iter__(self):
+        video_names = os.listdir(self.path)
+        for video in video_names:
+            tar_batches = os.listdir(os.path.join(self.path, video))
+            tar_batches.sort()
+            tar_file_paths = [os.path.join(self.path, video, tar_batch) for tar_batch in tar_batches]
+            print(tar_file_paths)
+            dataset = wds.WebDataset(tar_file_paths).decode("pil").to_tuple("png", "json")
+            seen_images = []
+            seen_annotations = []
+            for i, (image, annotation) in enumerate(dataset):
+                seen_images.append(image)
+                seen_annotations.append(annotation)
+                if i < self.window_size:
+                    continue
+                clip = np.stack([np.array(img.convert('RGB')) for img in seen_images[-self.window_size:]])
+                mid_annotation = seen_annotations[-int((self.window_size)/2)]
+                if self.transform:
+                    clip = self.transform(clip)
+                labels = [self.behavior_idx_map[behavior] for behavior in parse_annotation(mid_annotation)]
+                if self.label_type == 'onehot':
+                    yield clip, onehot(len(self.categories), labels)
+                elif self.label_type == 'categorical': 
+                    yield clip, torch.tensor(labels)
+                else:
+                    raise ValueError(f"label_type {self.label_type} not recognized.")
+
 def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"):
     if dataset_name == 'UCF101':
         dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'Caltech101':
         dataset = CalTech101WithSplit(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'HeinFishBehavior':
-        tar_files = [os.path.join(path, tarfile) for tarfile in os.listdir(path)]
-        dataset = HeinFishBehavior(tar_files, img_transform=augs, label_type=label_type)
+        dataset = HeinFishBehavior(path, img_transform=augs, label_type=label_type)
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
     return dataset
