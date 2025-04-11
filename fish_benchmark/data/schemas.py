@@ -30,7 +30,7 @@ class Metadata(BaseModel):
     observation_id: str
     observation_date: str
     # observation_type: str
-    source: str
+    # source: str
     fps: float
     media_duration: float
     time_offset: float 

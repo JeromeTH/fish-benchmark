@@ -8,26 +8,30 @@ import numpy as np
 from fish_benchmark.utils import PriorityQueue
 from fish_benchmark.data.schemas import Behavior, Event, Metadata
 
-BORIS_NAME_TO_METADATA = {
-    'observation_id': 'observation_id',
-    'observation_date': 'observation_date',
+METADATA_TO_BORIS_NAME = {
+    'observation_id': ['observation_id'],
+    'observation_date': ['observation_date'],
     # 'observation_type': 'observation_type', observation type is sometimes missing, however, it's not used
-    'source': 'source',
-    'fps_(frame/s)': 'fps',
-    'media_duration_(s)': 'media_duration',
-    'time_offset_(s)': 'time_offset'
+    # 'source': 'source',
+    'fps': ['fps_(frame/s)', 'fps'],
+    'media_duration': ['media_duration_(s)', 'total_length'],
+    'time_offset': ['time_offset_(s)']
 }
 
-BORIS_NAME_TO_EVENT = {
-    'start_(s)': 'start_time',
-    'stop_(s)': 'end_time',
+METADATA_DEFAULTS = {
+    'time_offset': 0
+}
+
+EVENT_TO_BORIS_NAME = {
+    'start_time': 'start_(s)',
+    'end_time': 'stop_(s)',
     'subject': 'subject',
 }
 
-BORIS_NAME_TO_BEHAVIOR = {
-    'behavior': 'name',
-    'behavioral_category': 'category',
-    'behavior_type': 'type'
+BEHAVIOR_TO_BORIS_NAME = {
+    'name': 'behavior',
+    'category': 'behavioral_category',
+    'type': 'behavior_type'
 }
 
 def read_df(annotation_path):
@@ -39,16 +43,33 @@ def parse_behaviors(df):
     '''
     Load behaviors from a BORIS file.
     '''
-    behaviors = df.groupby([boris_col_name for boris_col_name in BORIS_NAME_TO_BEHAVIOR.keys()]).size().reset_index(name='count')
+    behaviors = df.groupby([boris_col_name for boris_col_name in BEHAVIOR_TO_BORIS_NAME.values()]).size().reset_index(name='count')
     behavior_list = []
     for _, row in behaviors.iterrows():
         behavior_list.append(
             Behavior(**{
                     metadata_field: row[boris_col]
-                    for boris_col, metadata_field in BORIS_NAME_TO_BEHAVIOR.items()
+                    for metadata_field, boris_col in BEHAVIOR_TO_BORIS_NAME.items()
                 })
             )
     return behavior_list
+
+def get_metadata_field(field, df):
+    possible_names = METADATA_TO_BORIS_NAME[field]
+    for name in possible_names:
+        if name in df.columns:
+            return df[name][0]
+    if field in METADATA_DEFAULTS:
+        return METADATA_DEFAULTS[field]
+    raise ValueError(f"Metadata field {field} not found in BORIS file. Possible names: {possible_names}")
+
+def get_metadata(df):
+    kwargs = {
+            metadata_field: get_metadata_field(metadata_field, df)
+            for metadata_field in METADATA_TO_BORIS_NAME.keys()
+        }
+    # print(kwargs)
+    return Metadata(**kwargs)
 
 class BorisAnnotation:
     '''
@@ -57,10 +78,7 @@ class BorisAnnotation:
     def __init__(self, annotation_path):
         self.annotation_path = annotation_path
         self.df = read_df(self.annotation_path)
-        self.metadata: Metadata = Metadata(**{
-            metadata_field: self.df[boris_col][0]
-            for boris_col, metadata_field in BORIS_NAME_TO_METADATA.items()
-        })
+        self.metadata: Metadata = get_metadata(self.df)
         self.behaviors: List[Behavior] = parse_behaviors(self.df)
         self.events: List[Event] = self.parse_events(self.df)
         self.annotation_path = None
@@ -73,14 +91,14 @@ class BorisAnnotation:
         events = []
         for _, row in df.iterrows():
             event_kwargs = {
-                event_field: row[boris_col]
-                for boris_col, event_field in BORIS_NAME_TO_EVENT.items()
+                event_field: row[boris_col] 
+                for event_field, boris_col in EVENT_TO_BORIS_NAME.items()
             }
 
             event_kwargs.update({
                 'behavior': Behavior(**{
-                    metadata_field: row[boris_col]
-                    for boris_col, metadata_field in BORIS_NAME_TO_BEHAVIOR.items()
+                    metadata_field: "" if pd.isna(row[boris_col]) else row[boris_col]
+                    for metadata_field, boris_col in BEHAVIOR_TO_BORIS_NAME.items()
                 }),
                 'start_frame': self.to_frame(row['start_(s)']),
                 'end_frame': self.to_frame(row['stop_(s)'])

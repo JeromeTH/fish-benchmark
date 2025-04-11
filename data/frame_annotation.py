@@ -16,27 +16,20 @@ import time
 import threading
 import psutil
 from multiprocessing import Pool, cpu_count
-from fish_benchmark.utils import get_files_of_type, extract_video_identifier, extract_annotation_identifier
+from fish_benchmark.utils import get_files_of_type, extract_video_identifier, extract_annotation_identifier, setup_logger
 import re
 import logging
 
 
 DATA_PATH = "/share/j_sun/jth264/bites_training_data"
-PREDEFINED_TARGET_IDS = None
+PREDEFINED_TARGET_IDS = 'missing_annotations.txt'
 OUTPUT_PATH = "/share/j_sun/jth264/bites_frame_annotation"
 SHARD_SIZE = 1000
 
 if not os.path.exists(OUTPUT_PATH):
     os.makedirs(OUTPUT_PATH)
 
-# Set up logging
-logger = logging.getLogger('preprocess_logger')
-logger.setLevel(logging.DEBUG) 
-file_handler = logging.FileHandler('./logs/output/preprocess.log')
-file_handler.setLevel(logging.INFO)  # Set the level for file handler
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+logger = setup_logger('frame_annotation', 'logs/output/frame_annotation.log')
 
 def frame_id_with_padding(id):
     # Pad the frame ID with leading zeros to make it 6 digits
@@ -75,10 +68,12 @@ class Batch(BaseModel):
 class BatchShardWriter: 
     def __init__(self, video_name, output_path, batch_size=1000, save_as_tar=True):
         self.video_name = video_name
-        self.output_path = output_path
         self.batch_size = batch_size
         self.batch = Batch(frame_ids=[], data=[])
         self.save_as_tar = save_as_tar
+        self.output_path = output_path
+        if not os.path.exists(self.output_path):
+            os.makedirs(self.output_path)
 
     def add(self, frame_id, frame_name, frame, label_name, label):
         self.batch.frame_ids.append(frame_id)
@@ -156,11 +151,11 @@ if __name__ == '__main__':
             logger.info(f"Processing video {id} with annotation file {id_annotation_map[id]}")
             video_path = id_video_map[id]
             annotation_path = id_annotation_map[id]
-
             annotation = BorisAnnotation(annotation_path)
             annotation.load_video(video_path)
             video_name = annotation.metadata.observation_id
-            shard_writer = BatchShardWriter(video_name, OUTPUT_PATH, batch_size=SHARD_SIZE, save_as_tar=True)
+            video_output_path = os.path.join(OUTPUT_PATH, video_name)
+            shard_writer = BatchShardWriter(video_name, video_output_path, batch_size=SHARD_SIZE, save_as_tar=True)
             for frame, label in tqdm(annotation.stream_frame_annotations(), total=annotation.frame_count, desc=f"Processing {video_name}", leave=False):
                 #save PIL image frame as png 
                 frame_id = frame_id_with_padding(label['frame_id'])

@@ -133,12 +133,16 @@ class PriorityQueue:
     def to_list(self):
         return sorted(self._heap)
     
-def setup_logger(name, log_file, level=logging.INFO):
+def setup_logger(name, log_file = None, level=logging.INFO):
     logger = logging.getLogger(name)
     logger.setLevel(level) 
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.INFO)  # Set the level for file handler
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    if log_file is None:
+        # Create a console handler
+        handler = logging.StreamHandler()
+    else:
+        handler = logging.FileHandler(log_file)
+    handler.setLevel(level)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
     return logger

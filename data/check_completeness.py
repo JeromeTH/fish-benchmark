@@ -18,3 +18,13 @@ if __name__ == '__main__':
         for col in BORIS_NAME_TO_METADATA.keys():
             if col not in annotation_file.columns:
                 print(f"Missing column {col} in annotation file {id_annotation_map[id]}")
+                missing_annotations.append(id)
+                break
+    
+    #write the ids missing annotations to a file
+    with open("missing_annotations.txt", "w") as f:
+        for id in missing_annotations:
+            f.write(f"{id}\n")
+    
+                
+                
