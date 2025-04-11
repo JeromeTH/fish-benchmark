@@ -217,13 +217,49 @@ class HeinFishBehaviorSlidingWindow(IterableDataset):
                 else:
                     raise ValueError(f"label_type {self.label_type} not recognized.")
 
-def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"):
+class HeinFishBehaviorPrecomputed(IterableDataset):
+    def __init__(self, path, model_name, transform=None):
+        self.label_type = "onehot"
+        self.path = os.path.join(path, model_name)
+        self.transform = transform
+        self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
+        self.categories = list(self.behavior_idx_map.keys())
+
+    def __len__(self):
+        frames_path = os.path.join(self.path, "frames")
+        frame_files = os.listdir(frames_path)
+        return len(frame_files)
+    
+    def __iter__(self):
+        '''
+        frames/ contains the precomputed frames with <id>.pt
+        labels/ contains the precomputed labels with <id>.pt
+        '''
+        frames_path = os.path.join(self.path, "frames")
+        labels_path = os.path.join(self.path, "labels")
+        frame_files = os.listdir(frames_path)
+        for id in range(len(frame_files)):
+            frame_path = os.path.join(frames_path, f'{id}.pt')
+            label_path = os.path.join(labels_path, f'{id}.pt')
+            if not os.path.isfile(frame_path): continue
+            if not os.path.isfile(label_path): continue
+            frame = torch.load(frame_path)
+            label = torch.load(label_path)
+            if self.transform:
+                frame = self.transform(frame)
+            yield frame, label
+
+def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None):
     if dataset_name == 'UCF101':
         dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'Caltech101':
         dataset = CalTech101WithSplit(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'HeinFishBehavior':
         dataset = HeinFishBehavior(path, img_transform=augs, label_type=label_type)
+    elif dataset_name == 'HeinFishBehaviorSlidingWindow':
+        dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type)
+    elif dataset_name == 'HeinFishBehaviorPrecomputed': 
+        dataset = HeinFishBehaviorPrecomputed(path, model_name=model_name, transform=augs)
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
     return dataset

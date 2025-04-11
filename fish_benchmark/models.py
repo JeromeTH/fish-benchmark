@@ -38,24 +38,20 @@ def get_classifier(input_dim, output_dim, type):
     else:
         raise ValueError(f"Unknown classifier type: {type}")
     
-def get_pretrained_image_model(model_name):
+def get_pretrained_model(model_name):
     if model_name == 'clip':
         return CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
     elif model_name == 'dino':
         return AutoModel.from_pretrained('facebook/dinov2-base')
-    else:
-        raise ValueError(f"Unknown model name: {model_name}")
-
-def get_pretrained_video_model(model_name):
-    if model_name == 'videomae':
+    elif model_name == 'videomae':
         return VideoMAEModel.from_pretrained("MCG-NJU/videomae-base")
-    else: 
+    else:
         raise ValueError(f"Unknown model name: {model_name}")
 
 def get_input_transform(model_name):
     if model_name == 'clip':
         processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
-        transform = lambda img: processor(images=img, return_tensors="pt")['pixel_values']
+        transform = lambda img: processor(images=img, return_tensors="pt").pixel_values.squeeze(0)
         return transform
     elif model_name == 'dino':
         processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
@@ -68,27 +64,10 @@ def get_input_transform(model_name):
     else:
         raise ValueError(f"Unknown model name: {model_name}")
     
-class VideoClassifier(nn.Module):
-    def __init__(self, num_classes, pretrained_model = 'videomae', classifier_type='mlp', freeze_pretrained=True):
-        super().__init__()
-        self.model = get_pretrained_video_model(pretrained_model) 
-        self.hidden_size = self.model.config.hidden_size
-        self.num_classes = num_classes
-        self.classifier = get_classifier(self.hidden_size, num_classes, classifier_type)
-        if freeze_pretrained:
-            for param in self.model.parameters():
-                param.requires_grad = False
-
-    def forward(self, x):
-        last_hidden_state = self.model(x).last_hidden_state
-        cls_token = last_hidden_state[:, 0, :]  # Extract the [CLS] token
-        logits = self.classifier(cls_token)
-        return logits
-
-class ImageClassifier(nn.Module):
+class MediaClassifier(nn.Module):
     def __init__(self, num_classes, pretrained_model = 'clip', classifier_type='mlp', freeze_pretrained=True):
         super().__init__()
-        self.model = get_pretrained_image_model(pretrained_model) 
+        self.model = get_pretrained_model(pretrained_model) 
         self.hidden_size = self.model.config.hidden_size
         self.num_classes = num_classes
         self.classifier = get_classifier(self.hidden_size, num_classes, classifier_type)
@@ -100,3 +79,36 @@ class ImageClassifier(nn.Module):
         x = self.model(x).pooler_output
         x = self.classifier(x)
         return x
+
+# class VideoClassifier(nn.Module):
+#     def __init__(self, num_classes, pretrained_model = 'videomae', classifier_type='mlp', freeze_pretrained=True):
+#         super().__init__()
+#         self.model = get_pretrained_model(pretrained_model) 
+#         self.hidden_size = self.model.config.hidden_size
+#         self.num_classes = num_classes
+#         self.classifier = get_classifier(self.hidden_size, num_classes, classifier_type)
+#         if freeze_pretrained:
+#             for param in self.model.parameters():
+#                 param.requires_grad = False
+
+#     def forward(self, x):
+#         last_hidden_state = self.model(x).last_hidden_state
+#         cls_token = last_hidden_state[:, 0, :]  # Extract the [CLS] token
+#         logits = self.classifier(cls_token)
+#         return logits
+
+# class ImageClassifier(nn.Module):
+#     def __init__(self, num_classes, pretrained_model = 'clip', classifier_type='mlp', freeze_pretrained=True):
+#         super().__init__()
+#         self.model = get_pretrained_model(pretrained_model) 
+#         self.hidden_size = self.model.config.hidden_size
+#         self.num_classes = num_classes
+#         self.classifier = get_classifier(self.hidden_size, num_classes, classifier_type)
+#         if freeze_pretrained:
+#             for param in self.model.parameters():
+#                 param.requires_grad = False
+
+#     def forward(self, x):
+#         x = self.model(x).pooler_output
+#         x = self.classifier(x)
+#         return x
