@@ -196,7 +196,6 @@ class HeinFishBehaviorSlidingWindow(IterableDataset):
             tar_batches = os.listdir(os.path.join(self.path, video))
             tar_batches.sort()
             tar_file_paths = [os.path.join(self.path, video, tar_batch) for tar_batch in tar_batches]
-            print(tar_file_paths)
             dataset = wds.WebDataset(tar_file_paths).decode("pil").to_tuple("png", "json")
             seen_images = []
             seen_annotations = []

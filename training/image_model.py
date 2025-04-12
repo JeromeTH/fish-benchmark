@@ -3,16 +3,16 @@ In this file, we want to train the video MAE model for video classification with
 '''
 import torch
 import lightning as L
-from fish_benchmark.models import get_input_transform, MediaClassifier
+from fish_benchmark.models import get_input_transform, MediaClassifier, MediaClassifier 
 from fish_benchmark.data.dataset import get_dataset
 from fish_benchmark.litmodule import get_lit_module
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 import yaml
 
-PRETRAINED_MODEL = 'clip'
-CLASSIFIER = 'mlp'
-DATASET = 'HeinFishBehaviorPrecomputed'
+PRETRAINED_MODEL = 'dino'
+CLASSIFIER = 'attention'
+DATASET = 'Caltech101'
 
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
 model_config = yaml.safe_load(open('config/models.yml', 'r'))

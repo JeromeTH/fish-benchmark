@@ -3,38 +3,51 @@ import torch.nn as nn
 import torch.nn.functional as F
 import lightning as L
 from transformers import AutoImageProcessor, AutoProcessor
+import torch
 
-class MLP(nn.Module):
+class MLPWithPooling(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim=512):
-        super(MLP, self).__init__()
+        super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x):
+    def forward(self, last_hidden_state):
+        x = last_hidden_state.mean(dim=1)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x
     
-class AttentionBlock(nn.Module):
+class LinearWithPooling(nn.Module):
     def __init__(self, input_dim, output_dim):
-        super(AttentionBlock, self).__init__()
-        self.attention = nn.MultiheadAttention(embed_dim=input_dim, num_heads=8)
+        super().__init__()
         self.fc = nn.Linear(input_dim, output_dim)
 
-    def forward(self, x):
-        x = x.transpose(0, 1)  # Transpose for attention
-        attn_output, _ = self.attention(x, x, x)
-        x = attn_output.transpose(0, 1)  # Transpose back
+    def forward(self, last_hidden_state):
+        x = last_hidden_state.mean(dim=1)
         x = self.fc(x)
         return x
 
+class AttentionBlock(nn.Module):
+    def __init__(self, embed_dim, output_dim):
+        super().__init__()
+        self.query = nn.Parameter(torch.randn(1, output_dim, embed_dim))
+        self.attention = nn.MultiheadAttention(embed_dim, num_heads=1, batch_first=True)
+        self.head = nn.Linear(embed_dim, 1)
+
+    def forward(self, last_hidden_state):
+        batch_size = last_hidden_state.size(0)
+        query = self.query.expand(batch_size, -1, -1) 
+        attn_output, _ = self.attention(query, last_hidden_state, last_hidden_state)
+        output = self.head(attn_output).squeeze(-1)
+        return output
+
 def get_classifier(input_dim, output_dim, type):
     if type == 'mlp':
-        return MLP(input_dim, output_dim)
+        return MLPWithPooling(input_dim, output_dim)
     elif type == 'attention':
         return AttentionBlock(input_dim, output_dim)
     elif type == 'linear':
-        return nn.Linear(input_dim, output_dim)
+        return LinearWithPooling(input_dim, output_dim)
     else:
         raise ValueError(f"Unknown classifier type: {type}")
     
@@ -76,8 +89,8 @@ class MediaClassifier(nn.Module):
                 param.requires_grad = False
 
     def forward(self, x):
-        x = self.model(x).pooler_output
-        x = self.classifier(x)
+        last_hidden_state = self.model(x).last_hidden_state
+        x = self.classifier(last_hidden_state)
         return x
 
 # class VideoClassifier(nn.Module):
