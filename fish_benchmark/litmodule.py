@@ -41,6 +41,9 @@ class LitBinaryClassifierModule(L.LightningModule):
         #recall: for each class, how many of the actual positives are predicted as positive
         recall = ((preds * y).sum(dim=0) / y.sum(dim=0).clamp(min=1)).mean()
         self.log('train_recall', recall)
+
+        precision = ((preds * y).sum(dim=0) / preds.sum(dim=0).clamp(min=1)).mean()
+        self.log('train_precision', precision)
         return loss
     
     def test_step(self, batch, batch_idx):
@@ -55,6 +58,10 @@ class LitBinaryClassifierModule(L.LightningModule):
         #recall: for each class, how many of the actual positives are predicted as positive
         recall = ((preds * y).sum(dim=0) / y.sum(dim=0).clamp(min=1)).mean()
         self.log('test_recall', recall)
+
+        #precision: for each class, how many of the predicted positives are actual positives
+        precision = ((preds * y).sum(dim=0) / preds.sum(dim=0).clamp(min=1)).mean()
+        self.log('test_precision', precision)
 
     def configure_optimizers(self):
         learning_rate = self.hparams.learning_rate

@@ -7,6 +7,9 @@ from fish_benchmark.utils import setup_logger
 from tqdm import tqdm
 dataset_config = yaml.safe_load(open('./config/datasets.yml', 'r'))
 model_config = yaml.safe_load(open('./config/models.yml', 'r'))
+SPECIFIC_DATASET_MODEL_PAIRS = [
+    ('HeinFishBehaviorSlidingWindow', 'videomae')
+]
 
 def mkdir(path):
     if not os.path.exists(path):
@@ -20,6 +23,7 @@ if __name__ == "__main__":
         for MODEL in model_config.keys():
             # image datasets are preprocessed for image models etc. 
             if(dataset_config[DSET]['type'] != model_config[MODEL]['type']): continue
+            if SPECIFIC_DATASET_MODEL_PAIRS and (DSET, MODEL) not in SPECIFIC_DATASET_MODEL_PAIRS: continue
             logger.info(f"Precomputing input transformation of dataset {DSET} for model {MODEL}")
             try: 
                 LABEL_TYPE = dataset_config[DSET]['label_types'][0]

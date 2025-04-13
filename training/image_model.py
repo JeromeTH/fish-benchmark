@@ -10,9 +10,9 @@ from pytorch_lightning.loggers import WandbLogger
 import wandb
 import yaml
 
-PRETRAINED_MODEL = 'dino'
-CLASSIFIER = 'attention'
-DATASET = 'Caltech101'
+PRETRAINED_MODEL = 'timesformer'
+CLASSIFIER = 'linear'
+DATASET = 'HeinFishBehaviorSlidingWindowPrecomputed'
 
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
 model_config = yaml.safe_load(open('config/models.yml', 'r'))
@@ -21,13 +21,14 @@ LABEL_TYPE = dataset_config[DATASET]['label_types'][0]
 available_gpus = torch.cuda.device_count()
 print(f"Available GPUs: {available_gpus}")
 project = f"{PRETRAINED_MODEL}_training"
+print(type(dataset_config[DATASET]['preprocessed']))
 
 if __name__ == '__main__':
     with wandb.init(
         project=project,
         notes="Freezing the model parameters and only tuning the classifier head",
         tags=[PRETRAINED_MODEL, CLASSIFIER, DATASET, LABEL_TYPE],
-        config={"epochs": 20, "learning_rate": 0.001, "batch_size": 32},
+        config={"epochs": 20, "learning_rate": 0.001, "batch_size": 32, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
         dir="./logs"
     ) as run:
         wandb_logger = WandbLogger(
@@ -48,9 +49,10 @@ if __name__ == '__main__':
                                    train=False, 
                                    label_type=LABEL_TYPE, 
                                    model_name=PRETRAINED_MODEL)
+    
         print("Data loaded.")
-        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'])
-        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'])
+        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=7)
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'], num_workers=7)
         
         model = MediaClassifier(
             num_classes=len(train_dataset.categories), 

@@ -4,3 +4,7 @@ clip:
   type: image 
 dino: 
   type: image
+swinv2: 
+  type: image
+timesformer: 
+  type: video

@@ -12,6 +12,10 @@ import json
 from abc import ABC, abstractmethod
 from fish_benchmark.utils import get_files_of_type
 from queue import Queue 
+import time
+from contextlib import contextmanager
+from torchvision import transforms
+import yaml
 
 class BaseCategoricalDataset(Dataset):
     @property
@@ -180,6 +184,13 @@ class HeinFishBehavior(IterableDataset):
             else:
                 raise ValueError(f"label_type {self.label_type} not recognized.")
 
+# @contextmanager
+# def step_timer(name):
+#     start = time.time()
+#     yield
+#     end = time.time()
+#     print(f"[{name}] took {end - start:.6f} seconds")
+
 class HeinFishBehaviorSlidingWindow(IterableDataset):
     def __init__(self, path, transform=None, label_type = "onehot", window_size=16):
         super().__init__()
@@ -204,10 +215,15 @@ class HeinFishBehaviorSlidingWindow(IterableDataset):
                 seen_annotations.append(annotation)
                 if i < self.window_size:
                     continue
+
+                # with step_timer("sliding_window"):
                 clip = np.stack([np.array(img.convert('RGB')) for img in seen_images[-self.window_size:]])
                 mid_annotation = seen_annotations[-int((self.window_size)/2)]
+
+                # with step_timer("transform"):
                 if self.transform:
                     clip = self.transform(clip)
+                        
                 labels = [self.behavior_idx_map[behavior] for behavior in parse_annotation(mid_annotation)]
                 if self.label_type == 'onehot':
                     yield clip, onehot(len(self.categories), labels)
@@ -216,10 +232,22 @@ class HeinFishBehaviorSlidingWindow(IterableDataset):
                 else:
                     raise ValueError(f"label_type {self.label_type} not recognized.")
 
-class HeinFishBehaviorPrecomputed(IterableDataset):
+class PrecomputedDataset(IterableDataset):
     def __init__(self, path, model_name, transform=None):
         self.label_type = "onehot"
         self.path = os.path.join(path, model_name)
+        if not os.path.exists(self.path):
+            print("Did not precompute for this specific model, falling back to precomputed dataset of the same input type")
+            #fall back to default 
+            config = yaml.safe_load(open('./config/models.yml', 'r'))
+            model_type = config[model_name]['type']
+            if model_type == 'video':
+                self.path = os.path.join(path, "videomae")
+            elif model_type == 'image':
+                self.path = os.path.join(path, "clip")
+            else:
+                raise ValueError(f"Model type {model_type} not recognized.")
+            
         self.transform = transform
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         self.categories = list(self.behavior_idx_map.keys())
@@ -258,7 +286,9 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
     elif dataset_name == 'HeinFishBehaviorSlidingWindow':
         dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type)
     elif dataset_name == 'HeinFishBehaviorPrecomputed': 
-        dataset = HeinFishBehaviorPrecomputed(path, model_name=model_name, transform=augs)
+        dataset = PrecomputedDataset(path, model_name=model_name, transform=augs)
+    elif dataset_name == 'HeinFishBehaviorSlidingWindowPrecomputed':
+        dataset = PrecomputedDataset(path, model_name=model_name, transform=augs)
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
     return dataset

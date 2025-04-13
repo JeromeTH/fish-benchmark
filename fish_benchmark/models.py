@@ -1,4 +1,4 @@
-from transformers import VideoMAEModel, CLIPVisionModel, AutoModel
+from transformers import VideoMAEModel, CLIPVisionModel, AutoModel, Swinv2Model, TimesformerModel
 import torch.nn as nn
 import torch.nn.functional as F
 import lightning as L
@@ -58,6 +58,10 @@ def get_pretrained_model(model_name):
         return AutoModel.from_pretrained('facebook/dinov2-base')
     elif model_name == 'videomae':
         return VideoMAEModel.from_pretrained("MCG-NJU/videomae-base")
+    elif model_name == 'timesformer':
+        return TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400")
+    elif model_name == 'swinv2':
+        return Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
@@ -72,6 +76,14 @@ def get_input_transform(model_name):
         return transform
     elif model_name == 'videomae':
         processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
+        transform = lambda video: processor(list(video), return_tensors="pt").pixel_values.squeeze(0)
+        return transform
+    elif model_name == 'swinv2':
+        image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
+        transform = lambda img: image_processor(img.convert("RGB"), return_tensors="pt", do_resize = False).pixel_values.squeeze(0)
+        return transform
+    elif model_name == 'timesformer':
+        image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
         transform = lambda video: processor(list(video), return_tensors="pt").pixel_values.squeeze(0)
         return transform
     else:

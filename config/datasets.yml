@@ -33,3 +33,10 @@ HeinFishBehaviorPrecomputed:
   label_types: [onehot]
   type: image
   preprocessed: true
+
+HeinFishBehaviorSlidingWindowPrecomputed:
+  path: /share/j_sun/jth264/bites_frame_annotation_clips_precomputed
+  label_types: [onehot]
+  type: video
+  num_frames: 16
+  preprocessed: true
