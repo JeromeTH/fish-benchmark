@@ -1,12 +1,12 @@
 HeinFishBehavior:
-  path: /share/j_sun/jth264/bites_frame_annotation
+  path: /share/j_sun/jth264/bites_frame_annotation_splitted
   precomputed_path: /share/j_sun/jth264/bites_frame_annotation_precomputed
   label_types: [onehot]
   type: image
   preprocessed: false
 
 HeinFishBehaviorSlidingWindow: 
-  path: /share/j_sun/jth264/bites_frame_annotation
+  path: /share/j_sun/jth264/bites_frame_annotation_splitted
   precomputed_path: /share/j_sun/jth264/bites_frame_annotation_clips_precomputed
   label_types: [onehot]
   type: video

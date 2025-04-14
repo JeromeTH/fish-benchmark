@@ -159,7 +159,7 @@ def parse_annotation(annotation):
     return behaviors
 
 class HeinFishBehavior(IterableDataset):
-    def __init__(self, path, img_transform=None, label_type = "onehot"):
+    def __init__(self, path, img_transform=None, label_type = "onehot", train=True):
         super().__init__()
         self.path = path
         tar_files = get_files_of_type(path, ".tar")
@@ -168,7 +168,6 @@ class HeinFishBehavior(IterableDataset):
         self.label_type = label_type
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         self.categories = list(self.behavior_idx_map.keys())
-
 
     def __iter__(self):
         for sample in self.data: 
@@ -233,18 +232,20 @@ class HeinFishBehaviorSlidingWindow(IterableDataset):
                     raise ValueError(f"label_type {self.label_type} not recognized.")
 
 class PrecomputedDataset(IterableDataset):
-    def __init__(self, path, model_name, transform=None):
+    def __init__(self, path, model_name, transform=None, train=True):
         self.label_type = "onehot"
-        self.path = os.path.join(path, model_name)
+        TYPE = "train" if train else "test"
+        self.path = os.path.join(path, model_name, TYPE)
+        
         if not os.path.exists(self.path):
             print("Did not precompute for this specific model, falling back to precomputed dataset of the same input type")
             #fall back to default 
             config = yaml.safe_load(open('./config/models.yml', 'r'))
             model_type = config[model_name]['type']
             if model_type == 'video':
-                self.path = os.path.join(path, "videomae")
+                self.path = os.path.join(path, "videomae", TYPE)
             elif model_type == 'image':
-                self.path = os.path.join(path, "clip")
+                self.path = os.path.join(path, "clip", TYPE)
             else:
                 raise ValueError(f"Model type {model_type} not recognized.")
             
@@ -282,13 +283,13 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
     elif dataset_name == 'Caltech101':
         dataset = CalTech101WithSplit(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'HeinFishBehavior':
-        dataset = HeinFishBehavior(path, img_transform=augs, label_type=label_type)
+        dataset = HeinFishBehavior(path, img_transform=augs, label_type=label_type, train=train)
     elif dataset_name == 'HeinFishBehaviorSlidingWindow':
-        dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type)
+        dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type, train=train)
     elif dataset_name == 'HeinFishBehaviorPrecomputed': 
-        dataset = PrecomputedDataset(path, model_name=model_name, transform=augs)
+        dataset = PrecomputedDataset(path, model_name=model_name, transform=augs, train=train)
     elif dataset_name == 'HeinFishBehaviorSlidingWindowPrecomputed':
-        dataset = PrecomputedDataset(path, model_name=model_name, transform=augs)
+        dataset = PrecomputedDataset(path, model_name=model_name, transform=augs, train=train)
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
     return dataset

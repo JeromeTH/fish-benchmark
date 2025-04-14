@@ -10,14 +10,15 @@ from pytorch_lightning.loggers import WandbLogger
 import wandb
 import yaml
 
-PRETRAINED_MODEL = 'timesformer'
-CLASSIFIER = 'linear'
-DATASET = 'HeinFishBehaviorSlidingWindowPrecomputed'
+PRETRAINED_MODEL = 'clip'
+CLASSIFIER = 'mlp'
+DATASET = 'HeinFishBehaviorPrecomputed'
+LABEL_TYPE = 'onehot'
 
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
 model_config = yaml.safe_load(open('config/models.yml', 'r'))
 assert(dataset_config[DATASET]['type'] == model_config[PRETRAINED_MODEL]['type']), "Dataset and model type mismatch"
-LABEL_TYPE = dataset_config[DATASET]['label_types'][0]
+# LABEL_TYPE = dataset_config[DATASET]['label_types'][0]
 available_gpus = torch.cuda.device_count()
 print(f"Available GPUs: {available_gpus}")
 project = f"{PRETRAINED_MODEL}_training"

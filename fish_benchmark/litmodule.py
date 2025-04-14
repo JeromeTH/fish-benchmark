@@ -29,39 +29,32 @@ class LitBinaryClassifierModule(L.LightningModule):
         self.save_hyperparameters()  # Automatically saves learning_rate to self.hparams
         self.model = model
 
-    def training_step(self, batch, batch_idx):
+    def shared_step(self, batch, prefix):
         x, y = batch
         logits = self.model(x)
-        logits = torch.sigmoid(logits)
-        loss = F.binary_cross_entropy(logits, y)
-        self.log('train_loss', loss)
+        scalar = (y == 0).sum().float() / (y == 1).sum().clamp(min=1)
+        weights = torch.where(y == 1, scalar, 1)
+        probs = torch.sigmoid(logits)
+        #print(weights.shape)
+        loss = F.binary_cross_entropy(probs, y, weight=weights)
+        self.log(f'{prefix}_loss', loss)
         #train acc, there can be multiple labels having 1
-        preds = torch.sigmoid(logits)
-        preds = (preds > 0.5).float()
+        
+        preds = (probs > 0.5).float()
         #recall: for each class, how many of the actual positives are predicted as positive
         recall = ((preds * y).sum(dim=0) / y.sum(dim=0).clamp(min=1)).mean()
-        self.log('train_recall', recall)
+        self.log(f'{prefix}_recall', recall)
 
         precision = ((preds * y).sum(dim=0) / preds.sum(dim=0).clamp(min=1)).mean()
-        self.log('train_precision', precision)
+        self.log(f'{prefix}_precision', precision)
         return loss
+
+
+    def training_step(self, batch, batch_idx):
+        return self.shared_step(batch, 'train')
     
     def test_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self.model(x)
-        logits = torch.sigmoid(logits)
-        loss = F.binary_cross_entropy(logits, y)
-        self.log('test_loss', loss)
-        #test acc
-        preds = torch.sigmoid(logits)
-        preds = (preds > 0.5).float()
-        #recall: for each class, how many of the actual positives are predicted as positive
-        recall = ((preds * y).sum(dim=0) / y.sum(dim=0).clamp(min=1)).mean()
-        self.log('test_recall', recall)
-
-        #precision: for each class, how many of the predicted positives are actual positives
-        precision = ((preds * y).sum(dim=0) / preds.sum(dim=0).clamp(min=1)).mean()
-        self.log('test_precision', precision)
+        return self.shared_step(batch, 'test')
 
     def configure_optimizers(self):
         learning_rate = self.hparams.learning_rate
