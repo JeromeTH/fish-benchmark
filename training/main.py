@@ -12,13 +12,13 @@ import yaml
 
 PRETRAINED_MODEL = 'clip'
 CLASSIFIER = 'mlp'
-DATASET = 'HeinFishBehaviorPrecomputed'
+DATASET = 'Caltech101'
 LABEL_TYPE = 'onehot'
 
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
 model_config = yaml.safe_load(open('config/models.yml', 'r'))
 assert(dataset_config[DATASET]['type'] == model_config[PRETRAINED_MODEL]['type']), "Dataset and model type mismatch"
-# LABEL_TYPE = dataset_config[DATASET]['label_types'][0]
+assert(LABEL_TYPE in dataset_config[DATASET]['label_types']), f"Label type {LABEL_TYPE} not supported for dataset {DATASET}"
 available_gpus = torch.cuda.device_count()
 print(f"Available GPUs: {available_gpus}")
 project = f"{PRETRAINED_MODEL}_training"
@@ -29,7 +29,7 @@ if __name__ == '__main__':
         project=project,
         notes="Freezing the model parameters and only tuning the classifier head",
         tags=[PRETRAINED_MODEL, CLASSIFIER, DATASET, LABEL_TYPE],
-        config={"epochs": 20, "learning_rate": 0.001, "batch_size": 32, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
+        config={"epochs": 200, "learning_rate": 0.01, "batch_size": 32, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
         dir="./logs"
     ) as run:
         wandb_logger = WandbLogger(

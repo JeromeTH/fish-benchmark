@@ -14,7 +14,9 @@ TOKEN_FILE = "./creds/token.json"  # Create token file using interactive login o
 creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
 service = build("drive", "v3", credentials=creds)
 
-FOLDER_ID = "12dPNkATHe4xJP0DOFvI6ke6LoNT9KhIR"
+GOOGLE_DRIVE_FOLDER_ID = "12dPNkATHe4xJP0DOFvI6ke6LoNT9KhIR"
+LOCAL_DESTINATION = "/share/j_sun/jth264/bites_training_data"
+
 def download_directory(folder_id, output_path):
     '''
     downloads all files in a folder to local using the same folder name. For all subfolders in it, recursively download them.
@@ -68,7 +70,7 @@ def export_file(file_id, file_name, mime_type):
             print(f"Download {int(status.progress() * 100)}%.")
 
 if __name__ == "__main__":
-    download_directory(FOLDER_ID, "/share/j_sun/jth264/bites_training_data")
+    download_directory(GOOGLE_DRIVE_FOLDER_ID, LOCAL_DESTINATION)
 
 '''
 

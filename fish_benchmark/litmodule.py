@@ -36,7 +36,7 @@ class LitBinaryClassifierModule(L.LightningModule):
         weights = torch.where(y == 1, scalar, 1)
         probs = torch.sigmoid(logits)
         #print(weights.shape)
-        loss = F.binary_cross_entropy(probs, y, weight=weights)
+        loss = F.binary_cross_entropy(probs, y, weight=None)
         self.log(f'{prefix}_loss', loss)
         #train acc, there can be multiple labels having 1
         
@@ -76,25 +76,21 @@ class LitCategoricalClassifierModule(L.LightningModule):
         self.save_hyperparameters()  # Automatically saves learning_rate to self.hparams
         self.model = model
 
-    def training_step(self, batch, batch_idx):
+    def shared_step(self, batch, prefix):
         x, y = batch
         logits = self.model(x)
         loss = F.cross_entropy(logits, y)
-        self.log('train_loss', loss)
+        self.log(f'{prefix}_loss', loss)
         #train acc
         preds = torch.argmax(logits, dim=1)
         acc = (preds == y).float().mean()
-        self.log('train_acc', acc)
+        self.log(f'{prefix}_acc', acc)
         return loss
+
+    def training_step(self, batch, batch_idx):
+        return self.shared_step(batch, 'train')
     def test_step(self, batch, batch_idx):
-        x, y = batch
-        logits = self.model(x)
-        loss = F.cross_entropy(logits, y)
-        self.log('test_loss', loss)
-        #test acc
-        preds = torch.argmax(logits, dim=1)
-        acc = (preds == y).float().mean()
-        self.log('test_acc', acc)
+        return self.shared_step(batch, 'test')
 
     def configure_optimizers(self):
         learning_rate = self.hparams.learning_rate

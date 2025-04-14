@@ -16,7 +16,7 @@ HeinFishBehaviorSlidingWindow:
 UCF101:
   path: /share/j_sun/jth264/UCF101_subset
   precomputed_path: /share/j_sun/jth264/UCF101_precomputed
-  label_types: [categorical]
+  label_types: [categorical, onehot]
   type: video
   num_frames: 16
   preprocessed: false
@@ -24,7 +24,7 @@ UCF101:
 Caltech101: 
   path: /share/j_sun/jth264/Caltech101
   precomputed_path: /share/j_sun/jth264/Caltech101_precomputed
-  label_types: [categorical]
+  label_types: [categorical, onehot]
   type: image
   preprocessed: false
 
