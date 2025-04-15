@@ -65,7 +65,7 @@ def get_pretrained_model(model_name):
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
-def get_input_transform(model_name):
+def get_input_transform(model_name, do_resize = None):
     if model_name == 'clip':
         processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
         transform = lambda img: processor(images=img, return_tensors="pt").pixel_values.squeeze(0)
@@ -80,7 +80,7 @@ def get_input_transform(model_name):
         return transform
     elif model_name == 'swinv2':
         image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
-        transform = lambda img: image_processor(img.convert("RGB"), return_tensors="pt", do_resize = False).pixel_values.squeeze(0)
+        transform = lambda img: image_processor(img.convert("RGB"), return_tensors="pt", do_resize = do_resize).pixel_values.squeeze(0)
         return transform
     elif model_name == 'timesformer':
         image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")

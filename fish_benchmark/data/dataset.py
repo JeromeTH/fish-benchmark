@@ -159,12 +159,12 @@ def parse_annotation(annotation):
     return behaviors
 
 class HeinFishBehavior(IterableDataset):
-    def __init__(self, path, img_transform=None, label_type = "onehot", train=True):
+    def __init__(self, path, transform=None, label_type = "onehot", train=True):
         super().__init__()
         self.path = path
         tar_files = get_files_of_type(path, ".tar")
         self.data = wds.WebDataset(tar_files, shardshuffle=False).decode("pil").to_tuple("png", "json")
-        self.img_transform = img_transform
+        self.transform = transform
         self.label_type = label_type
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         self.categories = list(self.behavior_idx_map.keys())
@@ -172,8 +172,8 @@ class HeinFishBehavior(IterableDataset):
     def __iter__(self):
         for sample in self.data: 
             image, annotation = sample
-            if self.img_transform:
-                image = self.img_transform(image)
+            if self.transform:
+                image = self.transform(image)
 
             labels = [self.behavior_idx_map[behavior] for behavior in parse_annotation(annotation)]
             if self.label_type == 'onehot':
@@ -283,7 +283,7 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
     elif dataset_name == 'Caltech101':
         dataset = CalTech101WithSplit(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'HeinFishBehavior':
-        dataset = HeinFishBehavior(path, img_transform=augs, label_type=label_type, train=train)
+        dataset = HeinFishBehavior(path, transform=augs, label_type=label_type, train=train)
     elif dataset_name == 'HeinFishBehaviorSlidingWindow':
         dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type, train=train)
     elif dataset_name == 'HeinFishBehaviorPrecomputed': 

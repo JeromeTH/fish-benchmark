@@ -24,7 +24,7 @@ class LitBinaryClassifierModule(L.LightningModule):
             ...
     The labels for the dataset should be a one-hot encoding indicating whether each class is present or not.
     '''
-    def __init__(self, model, learning_rate=1e-4):
+    def __init__(self, model, learning_rate=1e-4, optimizer = 'adam', weight_decay = 0.001):
         super().__init__()
         self.save_hyperparameters()  # Automatically saves learning_rate to self.hparams
         self.model = model
@@ -33,10 +33,10 @@ class LitBinaryClassifierModule(L.LightningModule):
         x, y = batch
         logits = self.model(x)
         scalar = (y == 0).sum().float() / (y == 1).sum().clamp(min=1)
-        weights = torch.where(y == 1, scalar, 1)
+        weights = torch.where(y == 1, scalar * 0.1, 1)
         probs = torch.sigmoid(logits)
         #print(weights.shape)
-        loss = F.binary_cross_entropy(probs, y, weight=None)
+        loss = F.binary_cross_entropy(probs, y, weight=weights)
         self.log(f'{prefix}_loss', loss)
         #train acc, there can be multiple labels having 1
         
@@ -58,6 +58,8 @@ class LitBinaryClassifierModule(L.LightningModule):
 
     def configure_optimizers(self):
         learning_rate = self.hparams.learning_rate
+        weight_decay = self.hparams.weight_decay
+
         model_param = [param for name, param in self.model.named_parameters() if 'model' in name]
         classifier_param = [param for name, param in self.model.named_parameters() if 'classifier' in name]
         optimizer = torch.optim.AdamW([{'params': model_param},
@@ -71,7 +73,7 @@ class LitCategoricalClassifierModule(L.LightningModule):
     subclasses have to have a model component and a classifier component. 
     The labels for the dataset should be a single number indicating the class index.
     '''
-    def __init__(self, model, learning_rate=1e-4):
+    def __init__(self, model, learning_rate=1e-4, optimizer = 'adam'):
         super().__init__()
         self.save_hyperparameters()  # Automatically saves learning_rate to self.hparams
         self.model = model
@@ -104,8 +106,8 @@ class LitCategoricalClassifierModule(L.LightningModule):
     
 def get_lit_module(model, learning_rate, label_type):
     if label_type == 'onehot':
-        return LitBinaryClassifierModule(model, learning_rate)
+        return LitBinaryClassifierModule(model, learning_rate, optimizer='adam')
     elif label_type == 'categorical':
-        return LitCategoricalClassifierModule(model, learning_rate)
+        return LitCategoricalClassifierModule(model, learning_rate, optimizer='adam')
     else:
         raise ValueError(f"Unknown label type: {label_type}")

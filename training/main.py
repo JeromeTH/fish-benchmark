@@ -29,7 +29,7 @@ if __name__ == '__main__':
         project=project,
         notes="Freezing the model parameters and only tuning the classifier head",
         tags=[PRETRAINED_MODEL, CLASSIFIER, DATASET, LABEL_TYPE],
-        config={"epochs": 200, "learning_rate": 0.01, "batch_size": 32, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
+        config={"epochs": 200, "learning_rate": 0.001, "batch_size": 32, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
         dir="./logs"
     ) as run:
         wandb_logger = WandbLogger(
