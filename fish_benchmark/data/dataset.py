@@ -231,6 +231,29 @@ class HeinFishBehaviorSlidingWindow(IterableDataset):
                 else:
                     raise ValueError(f"label_type {self.label_type} not recognized.")
 
+class AbbyDataset(IterableDataset):
+    def __init__(self, path, transform=None, label_type = "onehot", train=True):
+        super().__init__()
+        self.path = path
+        self.transform = transform
+        self.label_type = label_type
+        cur_dir = os.path.dirname(os.path.abspath(__file__))
+        full_path = os.path.join(cur_dir, 'abby_dset_categories.json')
+        self.categories = json.load(open(full_path, 'r'))
+        self.train = train
+    
+    def __iter__(self):
+        for annotation_path in os.listdir(self.path):
+            track_paths = sorted(get_files_of_type(os.path.join(self.path, annotation_path), ".mp4"))
+            annotation_paths = sorted(get_files_of_type(os.path.join(self.path, annotation_path), ".txt"))
+            assert len(track_paths) == len(annotation_paths), f"Number of tracks and annotations do not match in {annotation_path}"
+            for track_path, annotation_path in zip(track_paths, annotation_paths):
+                container = av.open(track_path)
+                annotation = np.loadtxt(annotation_path, delimiter='\t', dtype=str)
+                assert annotation.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {annotation_path}"
+                for i, frame in enumerate(container.decode(video=0)):
+                    yield frame.to_image(), torch.tensor(annotation[i])
+
 class PrecomputedDataset(IterableDataset):
     def __init__(self, path, model_name, transform=None, train=True):
         self.label_type = "onehot"
