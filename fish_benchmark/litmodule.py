@@ -32,8 +32,9 @@ class LitBinaryClassifierModule(L.LightningModule):
     def shared_step(self, batch, prefix):
         x, y = batch
         logits = self.model(x)
-        scalar = (y == 0).sum().float() / (y == 1).sum().clamp(min=1)
-        weights = torch.where(y == 1, scalar * 0.1, 1)
+        proportion_0 = (y == 0).sum().float() / (y>=0).sum().clamp(min=1)
+        proportion_1 = (y == 1).sum().float() / (y >=0).sum().clamp(min=1)
+        weights = torch.where(y == 1, proportion_1, proportion_0)
         probs = torch.sigmoid(logits)
         #print(weights.shape)
         loss = F.binary_cross_entropy(probs, y, weight=weights)

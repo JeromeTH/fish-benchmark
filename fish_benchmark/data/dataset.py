@@ -168,6 +168,7 @@ class HeinFishBehavior(IterableDataset):
         self.label_type = label_type
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         self.categories = list(self.behavior_idx_map.keys())
+        
 
     def __iter__(self):
         for sample in self.data: 
@@ -191,7 +192,7 @@ class HeinFishBehavior(IterableDataset):
 #     print(f"[{name}] took {end - start:.6f} seconds")
 
 class HeinFishBehaviorSlidingWindow(IterableDataset):
-    def __init__(self, path, transform=None, label_type = "onehot", window_size=16):
+    def __init__(self, path, transform=None, label_type = "onehot", window_size=16, buffer = 1, gap = 1):
         super().__init__()
         self.path = path
         self.transform = transform
@@ -199,6 +200,9 @@ class HeinFishBehaviorSlidingWindow(IterableDataset):
         self.window_size = window_size
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         self.categories = list(self.behavior_idx_map.keys())
+        self.buffer = buffer
+        self.gap = gap
+        assert buffer+1<window_size
 
     def __iter__(self):
         video_names = os.listdir(self.path)
@@ -212,18 +216,26 @@ class HeinFishBehaviorSlidingWindow(IterableDataset):
             for i, (image, annotation) in enumerate(dataset):
                 seen_images.append(image)
                 seen_annotations.append(annotation)
-                if i < self.window_size:
+                if i < self.window_size*self.gap:
                     continue
 
                 # with step_timer("sliding_window"):
-                clip = np.stack([np.array(img.convert('RGB')) for img in seen_images[-self.window_size:]])
+                clip = np.stack([np.array(img.convert('RGB')) for img in seen_images[-self.window_size*self.gap::self.gap]])
+
+                print(f"the gap is {self.gap} so the clip is {len(clip)}")
                 mid_annotation = seen_annotations[-int((self.window_size)/2)]
+
+
+                  
 
                 # with step_timer("transform"):
                 if self.transform:
                     clip = self.transform(clip)
                         
                 labels = [self.behavior_idx_map[behavior] for behavior in parse_annotation(mid_annotation)]
+                mid_annotation_index = int((self.window_size)/2)
+                one_hots = torch.stack(seen_annotations[mid_annotation_index-self.buffer/2-1:mid_annotation_index+self.buffer/2])  # Shape: (3, 4)
+                labels[mid_annotation_index] = one_hots.max(dim=0).values
                 if self.label_type == 'onehot':
                     yield clip, onehot(len(self.categories), labels)
                 elif self.label_type == 'categorical': 
@@ -277,7 +289,7 @@ class PrecomputedDataset(IterableDataset):
                 frame = self.transform(frame)
             yield frame, label
 
-def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None):
+def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, buffer=1):
     if dataset_name == 'UCF101':
         dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'Caltech101':

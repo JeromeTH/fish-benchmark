@@ -10,10 +10,12 @@ from pytorch_lightning.loggers import WandbLogger
 import wandb
 import yaml
 
-PRETRAINED_MODEL = 'clip'
+PRETRAINED_MODEL = 'dino'
 CLASSIFIER = 'mlp'
-DATASET = 'Caltech101'
+DATASET = 'HeinFishBehaviorSlidingWindow'
 LABEL_TYPE = 'onehot'
+BUFFER = 16
+GAP = 2
 
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
 model_config = yaml.safe_load(open('config/models.yml', 'r'))
@@ -30,7 +32,7 @@ if __name__ == '__main__':
         entity = "fish-benchmark",
         notes="Freezing the model parameters and only tuning the classifier head",
         tags=[PRETRAINED_MODEL, CLASSIFIER, DATASET, LABEL_TYPE],
-        config={"epochs": 200, "learning_rate": 0.001, "batch_size": 32, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
+        config={"epochs": 200, "learning_rate": 0.0001, "batch_size": 32, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
         dir="./logs"
     ) as run:
         wandb_logger = WandbLogger(
@@ -44,13 +46,17 @@ if __name__ == '__main__':
                                     augs = get_input_transform(PRETRAINED_MODEL) if not dataset_config[DATASET]['preprocessed'] else None, 
                                     train=True, 
                                     label_type=LABEL_TYPE, 
-                                    model_name=PRETRAINED_MODEL)
+                                    model_name=PRETRAINED_MODEL,
+                                    buffer=BUFFER,
+                                    gap=GAP)
         test_dataset = get_dataset(DATASET, 
                                    dataset_config[DATASET]['path'], 
                                    augs = get_input_transform(PRETRAINED_MODEL) if not dataset_config[DATASET]['preprocessed'] else None, 
                                    train=False, 
                                    label_type=LABEL_TYPE, 
-                                   model_name=PRETRAINED_MODEL)
+                                   model_name=PRETRAINED_MODEL,
+                                   buffer=BUFFER,
+                                    gap=GAP)
     
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=7)
