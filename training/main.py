@@ -27,6 +27,7 @@ print(type(dataset_config[DATASET]['preprocessed']))
 if __name__ == '__main__':
     with wandb.init(
         project=project,
+        entity="fish-benchmark",
         notes="Freezing the model parameters and only tuning the classifier head",
         tags=[PRETRAINED_MODEL, CLASSIFIER, DATASET, LABEL_TYPE],
         config={"epochs": 200, "learning_rate": 0.001, "batch_size": 32, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
