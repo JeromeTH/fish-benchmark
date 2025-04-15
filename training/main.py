@@ -10,9 +10,9 @@ from pytorch_lightning.loggers import WandbLogger
 import wandb
 import yaml
 
-PRETRAINED_MODEL = 'clip'
+PRETRAINED_MODEL = 'dino'
 CLASSIFIER = 'mlp'
-DATASET = 'Caltech101'
+DATASET = 'Abby'
 LABEL_TYPE = 'onehot'
 
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
