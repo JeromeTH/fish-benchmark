@@ -189,14 +189,17 @@ class BaseSlidingWindowDataset():
         seen_annotations = []
         for i, (image, annotation) in enumerate(annotated_video_frames):
             #image is of type PIL image
-            seen_images.append(image)
+            seen_images.append(np.array(image.convert('RGB')))
             seen_annotations.append(annotation)
             if i + 1 < self.window_size:
                 #currently there is i + 1 frames in the buffer
                 continue
+
+            if i % self.step_size != 0:
+                continue
             
             gap = int(self.window_size/self.samples_per_window)
-            clip = np.stack([np.array(img.convert('RGB')) for img in seen_images[-self.window_size::gap]])
+            clip = np.stack([img for img in seen_images[-self.window_size::gap]])
             mid_idx = i - int(self.window_size/2)
             relevant_annotations = seen_annotations[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
             relevant_labels = torch.stack([self.annotation_to_label(annotation) for annotation in relevant_annotations]) 
@@ -264,6 +267,8 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
             label_paths = sorted(get_files_of_type(os.path.join(self.path, annotation_path), ".txt"))
             assert len(track_paths) == len(label_paths), f"Number of tracks and annotations do not match in {annotation_path}"
             for track_path, label_path in zip(track_paths, label_paths):
+                assert os.path.splitext(os.path.basename(track_path))[0] == os.path.splitext(os.path.basename(label_path))[0], \
+                f"Mismatched file names: {track_path} vs {label_path}"
                 container = av.open(track_path)
                 label = np.loadtxt(label_path, delimiter='\t', dtype=int)
                 assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
