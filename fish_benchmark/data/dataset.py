@@ -171,19 +171,44 @@ class HeinFishBehavior(IterableDataset):
         
 
     def __iter__(self):
-        for sample in self.data: 
-            image, annotation = sample
-            if self.transform:
-                image = self.transform(image)
+        video_names = os.listdir(self.path)
+        for video in video_names:
+            tar_batches = os.listdir(os.path.join(self.path, video))
+            tar_batches.sort()
+            tar_file_paths = [os.path.join(self.path, video, tar_batch) for tar_batch in tar_batches]
+            dataset = wds.WebDataset(tar_file_paths).decode("pil").to_tuple("png", "json")
+            seen_images = []
+            seen_annotations = []
+            for i, (image, annotation) in enumerate(dataset):
+                seen_images.append(image)
+                seen_annotations.append(annotation)
+                if i < self.window_size:
+                    continue
 
-            labels = [self.behavior_idx_map[behavior] for behavior in parse_annotation(annotation)]
-            if self.label_type == 'onehot':
-                yield image, onehot(len(self.categories), labels)
-            elif self.label_type == 'categorical': 
-                yield image, torch.tensor(labels)
-            else:
-                raise ValueError(f"label_type {self.label_type} not recognized.")
+                # with step_timer("sliding_window"):
+                clip = np.stack([np.array(img.convert('RGB')) for img in seen_images[-self.window_size::]])
 
+                print(f"the gap is {self.gap} so the clip is {len(clip)}")
+                mid_annotation = seen_annotations[-int((self.window_size)/2)]
+
+
+                  
+
+                # with step_timer("transform"):
+                if self.transform:
+                    clip = self.transform(clip)
+                        
+                labels = [self.behavior_idx_map[behavior] for behavior in parse_annotation(mid_annotation)]
+                mid_annotation_index = int((self.window_size)/2)
+                one_hots = torch.stack(seen_annotations[mid_annotation_index-self.buffer/2-1:mid_annotation_index+self.buffer/2])  # Shape: (3, 4)
+                label = one_hots.max(dim=0).values
+                if self.label_type == 'onehot':
+                    yield mid_annotation, onehot(len(self.categories), label)
+                elif self.label_type == 'categorical': 
+                    yield mid_annotation, label
+                else:
+                    raise ValueError(f"label_type {self.label_type} not recognized.")
+        
 # @contextmanager
 # def step_timer(name):
 #     start = time.time()
@@ -202,12 +227,12 @@ class HeinFishBehaviorSlidingWindow(IterableDataset):
         self.categories = list(self.behavior_idx_map.keys())
         self.buffer = buffer
         self.gap = gap
-        assert buffer+1<window_size
+        assert buffer<=window_size
 
     def __iter__(self):
         video_names = os.listdir(self.path)
         for video in video_names:
-            tar_batches = os.listdir(os.path.join(self.path, video))
+            tar_batches = os.listdir(os.path.join(".."+self.path, video))
             tar_batches.sort()
             tar_file_paths = [os.path.join(self.path, video, tar_batch) for tar_batch in tar_batches]
             dataset = wds.WebDataset(tar_file_paths).decode("pil").to_tuple("png", "json")
@@ -312,15 +337,15 @@ class PrecomputedDataset(IterableDataset):
                 frame = self.transform(frame)
             yield frame, label
 
-def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, buffer=1):
+def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, buffer=1, gap=1):
     if dataset_name == 'UCF101':
         dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'Caltech101':
         dataset = CalTech101WithSplit(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'HeinFishBehavior':
-        dataset = HeinFishBehavior(path, transform=augs, label_type=label_type, train=train)
+        dataset = HeinFishBehavior(path, transform=augs, label_type=label_type, train=train, buffer=buffer)
     elif dataset_name == 'HeinFishBehaviorSlidingWindow':
-        dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type, train=train)
+        dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type,  buffer=buffer, gap=gap)
     elif dataset_name == 'HeinFishBehaviorPrecomputed': 
         dataset = PrecomputedDataset(path, model_name=model_name, transform=augs, train=train)
     elif dataset_name == 'HeinFishBehaviorSlidingWindowPrecomputed':
