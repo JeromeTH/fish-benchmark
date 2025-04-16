@@ -158,6 +158,15 @@ def parse_annotation(annotation):
         behaviors.append(event['behavior']['name'])
     return behaviors
 
+def get_sample_indices(lst_len, clip_len, sample_method = "even-spaced"):
+    if sample_method == "even-spaced":
+        indices = np.linspace(0, lst_len - 1, clip_len).astype(int)
+    elif sample_method == "random":
+        indices = np.random.choice(lst_len, clip_len, replace=False)
+    else:
+        raise ValueError(f"sample_method {sample_method} not recognized.")
+    return indices
+
 class BaseSlidingWindowDataset():
     def __init__(self, 
                  input_transform: callable=None, 
@@ -181,7 +190,7 @@ class BaseSlidingWindowDataset():
         self.categories = categories
         self.samples_per_window = samples_per_window
         self.is_image_dataset = is_image_dataset
-        if self.is_image_dataset: assert self.window_size ==1, "window size should be 1 for image datasets"
+        if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
 
 
     def _scan(self, annotated_video_frames):
