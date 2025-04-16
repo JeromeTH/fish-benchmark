@@ -9,28 +9,45 @@ from fish_benchmark.litmodule import get_lit_module
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 import yaml
+import argparse
 
-PRETRAINED_MODEL = 'videomae'
-CLASSIFIER = 'mlp'
-DATASET = 'AbbySlidingWindow'
-LABEL_TYPE = 'onehot'
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--classifier", default="mlp")
+    parser.add_argument("--dataset", required=True)
+    parser.add_argument("--label_type", default='onehot')
+    parser.add_argument("--epochs", default=20)
+    parser.add_argument("--lr", default=.00005)
+    parser.add_argument("--batch_size", default=32)
 
-dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
-model_config = yaml.safe_load(open('config/models.yml', 'r'))
-assert(dataset_config[DATASET]['type'] == model_config[PRETRAINED_MODEL]['type']), "Dataset and model type mismatch"
-assert(LABEL_TYPE in dataset_config[DATASET]['label_types']), f"Label type {LABEL_TYPE} not supported for dataset {DATASET}"
-available_gpus = torch.cuda.device_count()
-print(f"Available GPUs: {available_gpus}")
-project = f"{PRETRAINED_MODEL}_training"
-print(type(dataset_config[DATASET]['preprocessed']))
+    return parser.parse_args()
 
 if __name__ == '__main__':
+    args = get_args()
+    PRETRAINED_MODEL = args.model
+    CLASSIFIER = args.classifier
+    DATASET = args.dataset
+    LABEL_TYPE = args.label_type
+    EPOCHS = args.epochs
+    LEARNING_RATE = args.lr
+    BATCH_SIZE = args.batch_size
+
+    dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
+    model_config = yaml.safe_load(open('config/models.yml', 'r'))
+    assert(dataset_config[DATASET]['type'] == model_config[PRETRAINED_MODEL]['type']), "Dataset and model type mismatch"
+    assert(LABEL_TYPE in dataset_config[DATASET]['label_types']), f"Label type {LABEL_TYPE} not supported for dataset {DATASET}"
+    available_gpus = torch.cuda.device_count()
+    print(f"Available GPUs: {available_gpus}")
+    PROJECT = f"{PRETRAINED_MODEL}_training"
+    print(type(dataset_config[DATASET]['preprocessed']))
+
     with wandb.init(
-        project=project,
+        project=PROJECT,
         entity = "fish-benchmark",
         notes="Freezing the model parameters and only tuning the classifier head",
         tags=[PRETRAINED_MODEL, CLASSIFIER, DATASET, LABEL_TYPE],
-        config={"epochs": 200, "learning_rate": 0.0001, "batch_size": 32, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
+        config={"epochs": EPOCHS, "learning_rate": LEARNING_RATE, "batch_size": BATCH_SIZE, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
         dir="./logs"
     ) as run:
         wandb_logger = WandbLogger(
@@ -65,6 +82,6 @@ if __name__ == '__main__':
 
         lit_module = get_lit_module(model, learning_rate=run.config['learning_rate'], label_type=LABEL_TYPE)
         trainer = L.Trainer(max_epochs=run.config['epochs'], logger=wandb_logger)
-        trainer.fit(lit_module, train_dataloader)
+        trainer.fit(lit_module, train_dataloader, val_dataloaders=test_dataloader)
         trainer.test(lit_module, test_dataloader)
         trainer.save_checkpoint(f"{PRETRAINED_MODEL}_model.ckpt")
