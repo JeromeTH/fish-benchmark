@@ -32,22 +32,29 @@ class LitBinaryClassifierModule(L.LightningModule):
     def shared_step(self, batch, prefix):
         x, y = batch
         logits = self.model(x)
-        proportion_0 = (y == 0).sum().float() / (y>=0).sum().clamp(min=1)
-        proportion_1 = (y == 1).sum().float() / (y >=0).sum().clamp(min=1)
-        weights = torch.where(y == 1, proportion_1, proportion_0)
+        # proportion_0 = (y == 0).sum().float() / (y>=0).sum().clamp(min=1)
+        # proportion_1 = (y == 1).sum().float() / (y >=0).sum().clamp(min=1)
+        # weights = torch.where(y == 1, proportion_1, proportion_0)
         probs = torch.sigmoid(logits)
         #print(weights.shape)
-        loss = F.binary_cross_entropy(probs, y, weight=weights)
+        loss = F.binary_cross_entropy(probs, y, weight=None)
         self.log(f'{prefix}_loss', loss)
         #train acc, there can be multiple labels having 1
         
         preds = (probs > 0.5).float()
         #recall: for each class, how many of the actual positives are predicted as positive
-        recall = ((preds * y).sum(dim=0) / y.sum(dim=0).clamp(min=1)).mean()
+        true_labels_count = y.sum()
+        pos_labeles_count = preds.sum()
+        recall = (preds * y).sum() / true_labels_count.clamp(min=1)
         self.log(f'{prefix}_recall', recall)
-
-        precision = ((preds * y).sum(dim=0) / preds.sum(dim=0).clamp(min=1)).mean()
+        precision = (preds * y).sum() / pos_labeles_count.clamp(min=1)
         self.log(f'{prefix}_precision', precision)
+
+        f1 = 2 * (precision * recall) / (precision + recall).clamp(min=1)
+        self.log(f'{prefix}_f1', f1)
+        #accuracy: what is the proportion of the labels that are predicted correctly
+        acc = (preds == y).float().mean()
+        self.log(f'{prefix}_acc', acc)
         return loss
 
 
