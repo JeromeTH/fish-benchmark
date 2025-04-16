@@ -10,12 +10,10 @@ from pytorch_lightning.loggers import WandbLogger
 import wandb
 import yaml
 
-PRETRAINED_MODEL = 'dino'
+PRETRAINED_MODEL = 'videomae'
 CLASSIFIER = 'mlp'
-DATASET = 'HeinFishBehaviorSlidingWindow'
+DATASET = 'AbbySlidingWindow'
 LABEL_TYPE = 'onehot'
-BUFFER = 16
-GAP = 2
 
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
 model_config = yaml.safe_load(open('config/models.yml', 'r'))
@@ -46,17 +44,13 @@ if __name__ == '__main__':
                                     augs = get_input_transform(PRETRAINED_MODEL) if not dataset_config[DATASET]['preprocessed'] else None, 
                                     train=True, 
                                     label_type=LABEL_TYPE, 
-                                    model_name=PRETRAINED_MODEL,
-                                    buffer=BUFFER,
-                                    gap=GAP)
+                                    model_name=PRETRAINED_MODEL)
         test_dataset = get_dataset(DATASET, 
                                    dataset_config[DATASET]['path'], 
                                    augs = get_input_transform(PRETRAINED_MODEL) if not dataset_config[DATASET]['preprocessed'] else None, 
                                    train=False, 
                                    label_type=LABEL_TYPE, 
-                                   model_name=PRETRAINED_MODEL,
-                                   buffer=BUFFER,
-                                    gap=GAP)
+                                   model_name=PRETRAINED_MODEL)
     
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=7)

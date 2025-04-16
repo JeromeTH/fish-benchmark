@@ -158,51 +158,75 @@ def parse_annotation(annotation):
         behaviors.append(event['behavior']['name'])
     return behaviors
 
-class HeinFishBehavior(IterableDataset):
-    def __init__(self, path, transform=None, label_type = "onehot", train=True):
-        super().__init__()
-        self.path = path
-        tar_files = get_files_of_type(path, ".tar")
-        self.data = wds.WebDataset(tar_files, shardshuffle=False).decode("pil").to_tuple("png", "json")
-        self.transform = transform
-        self.label_type = label_type
-        self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
-        self.categories = list(self.behavior_idx_map.keys())
-        
-
-    def __iter__(self):
-        for sample in self.data: 
-            image, annotation = sample
-            if self.transform:
-                image = self.transform(image)
-
-            labels = [self.behavior_idx_map[behavior] for behavior in parse_annotation(annotation)]
-            if self.label_type == 'onehot':
-                yield image, onehot(len(self.categories), labels)
-            elif self.label_type == 'categorical': 
-                yield image, torch.tensor(labels)
-            else:
-                raise ValueError(f"label_type {self.label_type} not recognized.")
-
-# @contextmanager
-# def step_timer(name):
-#     start = time.time()
-#     yield
-#     end = time.time()
-#     print(f"[{name}] took {end - start:.6f} seconds")
-
-class HeinFishBehaviorSlidingWindow(IterableDataset):
-    def __init__(self, path, transform=None, label_type = "onehot", window_size=16, buffer = 1, gap = 1):
-        super().__init__()
-        self.path = path
-        self.transform = transform
+class BaseSlidingWindowDataset():
+    def __init__(self, 
+                 input_transform: callable=None, 
+                 annotation_to_label: callable=None,
+                 label_type: str= "onehot", 
+                 window_size: int=16, 
+                 tolerance_region: int = 16, 
+                 samples_per_window: int= 16, 
+                 step_size = 1, 
+                 categories: list = None, 
+                 is_image_dataset = False):
+        self.input_transform = input_transform
+        self.annotation_to_label = annotation_to_label
         self.label_type = label_type
         self.window_size = window_size
+        assert window_size % samples_per_window == 0, f"window_size {window_size} should be a factor of samples_per_window {samples_per_window}"
+        assert tolerance_region <= (window_size - 1)//2, f"tolerance_region {tolerance_region} should be less than or equal to window_size {window_size//2}"
+        assert label_type == "onehot", 'currently only onehot is supported'
+        self.tolerance_region = tolerance_region
+        self.step_size = step_size
+        self.categories = categories
+        self.samples_per_window = samples_per_window
+        self.is_image_dataset = is_image_dataset
+        if self.is_image_dataset: assert self.window_size ==1, "window size should be 1 for image datasets"
+
+
+    def _scan(self, annotated_video_frames):
+        seen_images = []
+        seen_annotations = []
+        for i, (image, annotation) in enumerate(annotated_video_frames):
+            #image is of type PIL image
+            seen_images.append(image)
+            seen_annotations.append(annotation)
+            if i + 1 < self.window_size:
+                #currently there is i + 1 frames in the buffer
+                continue
+            
+            gap = int(self.window_size/self.samples_per_window)
+            clip = np.stack([np.array(img.convert('RGB')) for img in seen_images[-self.window_size::gap]])
+            mid_idx = i - int(self.window_size/2)
+            relevant_annotations = seen_annotations[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
+            relevant_labels = torch.stack([self.annotation_to_label(annotation) for annotation in relevant_annotations]) 
+            assert relevant_labels.shape == (len(relevant_annotations), len(self.categories)), f"relevant_labels shape {relevant_labels.shape} does not match relevant_annotations shape {relevant_annotations.shape}"
+            if self.input_transform:
+                clip = self.input_transform(clip)
+            else: 
+                clip = torch.from_numpy(clip)
+
+            if self.is_image_dataset: clip = clip.squeeze()
+
+            unioned_labels = torch.any(relevant_labels.bool(), dim=0).float()
+            yield clip, unioned_labels
+        
+class MaxDataset(IterableDataset, BaseSlidingWindowDataset):
+    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False):
+        self.path = os.path.join(path, "train" if train else "test")
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
-        self.categories = list(self.behavior_idx_map.keys())
-        self.buffer = buffer
-        self.gap = gap
-        assert buffer+1<window_size
+        BaseSlidingWindowDataset.__init__(
+            self,
+            input_transform=transform,
+            annotation_to_label=lambda x: onehot(len(self.categories), [self.behavior_idx_map[behavior] for behavior in parse_annotation(x)]),
+            label_type=label_type,
+            window_size=window_size,
+            tolerance_region=tolerance_region,
+            samples_per_window=samples_per_window,
+            step_size=step_size,
+            categories=list(self.behavior_idx_map.keys()), 
+            is_image_dataset=is_image_dataset         
+        )
 
     def __iter__(self):
         video_names = os.listdir(self.path)
@@ -210,50 +234,30 @@ class HeinFishBehaviorSlidingWindow(IterableDataset):
             tar_batches = os.listdir(os.path.join(self.path, video))
             tar_batches.sort()
             tar_file_paths = [os.path.join(self.path, video, tar_batch) for tar_batch in tar_batches]
-            dataset = wds.WebDataset(tar_file_paths).decode("pil").to_tuple("png", "json")
-            seen_images = []
-            seen_annotations = []
-            for i, (image, annotation) in enumerate(dataset):
-                seen_images.append(image)
-                seen_annotations.append(annotation)
-                if i < self.window_size*self.gap:
-                    continue
-
-                # with step_timer("sliding_window"):
-                clip = np.stack([np.array(img.convert('RGB')) for img in seen_images[-self.window_size*self.gap::self.gap]])
-
-                print(f"the gap is {self.gap} so the clip is {len(clip)}")
-                mid_annotation = seen_annotations[-int((self.window_size)/2)]
+            video_frames = wds.WebDataset(tar_file_paths).decode("pil").to_tuple("png", "json")
+            yield from self._scan(video_frames)
 
 
-                  
-
-                # with step_timer("transform"):
-                if self.transform:
-                    clip = self.transform(clip)
-                        
-                labels = [self.behavior_idx_map[behavior] for behavior in parse_annotation(mid_annotation)]
-                mid_annotation_index = int((self.window_size)/2)
-                one_hots = torch.stack(seen_annotations[mid_annotation_index-self.buffer/2-1:mid_annotation_index+self.buffer/2])  # Shape: (3, 4)
-                labels[mid_annotation_index] = one_hots.max(dim=0).values
-                if self.label_type == 'onehot':
-                    yield clip, onehot(len(self.categories), labels)
-                elif self.label_type == 'categorical': 
-                    yield clip, torch.tensor(labels)
-                else:
-                    raise ValueError(f"label_type {self.label_type} not recognized.")
-
-class AbbyDataset(IterableDataset):
-    def __init__(self, path, transform=None, label_type = "onehot", train=True):
-        super().__init__()
-        self.path = path
-        self.transform = transform
-        self.label_type = label_type
+class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
+    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False):
+        self.path = os.path.join(path, "train" if train else "test")
         cur_dir = os.path.dirname(os.path.abspath(__file__))
         full_path = os.path.join(cur_dir, 'abby_dset_categories.json')
         self.categories = json.load(open(full_path, 'r'))
-        self.train = train
-    
+        BaseSlidingWindowDataset.__init__(
+            self,
+            input_transform=transform,
+            annotation_to_label=lambda x: torch.tensor(x), 
+            #label shouuld be a torch tensor of shape (num_classes,)
+            label_type=label_type,
+            window_size=window_size,
+            tolerance_region=tolerance_region,
+            samples_per_window=samples_per_window,
+            step_size=step_size,
+            categories=self.categories,    
+            is_image_dataset=is_image_dataset       
+        )
+
     def __iter__(self):
         for annotation_path in os.listdir(self.path):
             track_paths = sorted(get_files_of_type(os.path.join(self.path, annotation_path), ".mp4"))
@@ -263,8 +267,18 @@ class AbbyDataset(IterableDataset):
                 container = av.open(track_path)
                 label = np.loadtxt(label_path, delimiter='\t', dtype=int)
                 assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
-                for i, frame in enumerate(container.decode(video=0)):
-                    yield frame.to_image(), torch.tensor(label[i])
+                def annotated_frame_iterator():
+                    for i, frame in enumerate(container.decode(video=0)):
+                        yield frame.to_image(), label[i]
+
+                yield from self._scan(annotated_frame_iterator())
+
+# @contextmanager
+# def step_timer(name):
+#     start = time.time()
+#     yield
+#     end = time.time()
+#     print(f"[{name}] took {end - start:.6f} seconds")
 
 class PrecomputedDataset(IterableDataset):
     def __init__(self, path, model_name, transform=None, train=True):
@@ -312,15 +326,61 @@ class PrecomputedDataset(IterableDataset):
                 frame = self.transform(frame)
             yield frame, label
 
-def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, buffer=1):
+def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None):
     if dataset_name == 'UCF101':
         dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'Caltech101':
         dataset = CalTech101WithSplit(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'HeinFishBehavior':
-        dataset = HeinFishBehavior(path, transform=augs, label_type=label_type, train=train)
+        # dataset = HeinFishBehavior(path, transform=augs, label_type=label_type, train=train)
+        dataset = MaxDataset(
+            path,
+            train=train, 
+            transform=augs,
+            label_type=label_type,
+            window_size = 1, 
+            tolerance_region = 0,
+            samples_per_window = 1,
+            step_size = 1, 
+            is_image_dataset=True
+        )
     elif dataset_name == 'HeinFishBehaviorSlidingWindow':
-        dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type, train=train)
+        # dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type, train=train)
+        dataset = MaxDataset(
+            path, 
+            train=train,
+            transform=augs,
+            label_type=label_type,
+            window_size = 16,
+            tolerance_region = 7,
+            samples_per_window = 16,
+            step_size = 1, 
+            is_image_dataset=False
+        )
+    elif dataset_name == 'AbbyFrames':
+        dataset = AbbyDataset(
+            path, 
+            train=train, 
+            transform=augs, 
+            label_type=label_type, 
+            window_size=1, 
+            tolerance_region = 0,
+            samples_per_window = 1,
+            step_size=1, 
+            is_image_dataset=True
+        )
+    elif dataset_name == 'AbbySlidingWindow':
+        dataset = AbbyDataset(
+            path, 
+            train=train, 
+            transform=augs, 
+            label_type=label_type, 
+            window_size=16, 
+            tolerance_region = 7,
+            samples_per_window = 16,
+            step_size=1, 
+            is_image_dataset=False
+        )
     elif dataset_name == 'HeinFishBehaviorPrecomputed': 
         dataset = PrecomputedDataset(path, model_name=model_name, transform=augs, train=train)
     elif dataset_name == 'HeinFishBehaviorSlidingWindowPrecomputed':

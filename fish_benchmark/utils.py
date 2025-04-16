@@ -1,6 +1,4 @@
 import numpy as np
-from torchvision.datasets import Caltech101
-from torch.utils.data import Subset
 import torch
 import os
 import webdataset as wds
@@ -49,40 +47,40 @@ def sample_frame_indices(clip_len, frame_sample_rate, seg_len):
     indices = np.clip(indices, start_idx, end_idx - 1).astype(np.int64)
     return indices
 
-def load_caltech101(path, augs, train=True):
-    dataset = Caltech101(root=path, target_type = "category", transform= augs, download=True)
-    # print(dataset.categories)
-    #generate random indices to be the training set * 0.8, will split using SubSet later to be the training set 
-    random_perm = torch.randperm(len(dataset))
-    training_indices = random_perm[:int(0.8 * len(dataset))]  # 80% for training
-    testing_indices = random_perm[int(0.8 * len(dataset)):]  # 20% for testing
-    if train: 
-        res = Subset(dataset, training_indices)
-    else: 
-        res = Subset(dataset, testing_indices)
-    res.categories = dataset.categories
-    res.transform = augs
-    return res
+# def load_caltech101(path, augs, train=True):
+#     dataset = Caltech101(root=path, target_type = "category", transform= augs, download=True)
+#     # print(dataset.categories)
+#     #generate random indices to be the training set * 0.8, will split using SubSet later to be the training set 
+#     random_perm = torch.randperm(len(dataset))
+#     training_indices = random_perm[:int(0.8 * len(dataset))]  # 80% for training
+#     testing_indices = random_perm[int(0.8 * len(dataset)):]  # 20% for testing
+#     if train: 
+#         res = Subset(dataset, training_indices)
+#     else: 
+#         res = Subset(dataset, testing_indices)
+#     res.categories = dataset.categories
+#     res.transform = augs
+#     return res
 
-def load_fish_data(path, augs, train=True):
-    tar_files = [os.path.join(path, tarfile) for tarfile in os.listdir(path)]
-    dataset = wds.WebDataset(tar_files).decode("pil").to_tuple("png", "json")
-    def preprocess(sample):
-        image, json_data = sample
-        # Convert the image to a tensor and apply transformations
-        image = augs(image)
-        # Convert JSON data to a dictionary
-        json_data = json.loads(json_data)
-        # Extract the label and other information from the JSON data
-        label = json_data['label']
-        return image, label
+# def load_fish_data(path, augs, train=True):
+#     tar_files = [os.path.join(path, tarfile) for tarfile in os.listdir(path)]
+#     dataset = wds.WebDataset(tar_files).decode("pil").to_tuple("png", "json")
+#     def preprocess(sample):
+#         image, json_data = sample
+#         # Convert the image to a tensor and apply transformations
+#         image = augs(image)
+#         # Convert JSON data to a dictionary
+#         json_data = json.loads(json_data)
+#         # Extract the label and other information from the JSON data
+#         label = json_data['label']
+#         return image, label
     
-    dataset = wds.DataPipeline(
-        wds.SimpleShardList(tar_files),
-        wds.decode("pil"),
-        wds.to_tuple("png", "json"),
-    )
-    return dataset
+#     dataset = wds.DataPipeline(
+#         wds.SimpleShardList(tar_files),
+#         wds.decode("pil"),
+#         wds.to_tuple("png", "json"),
+#     )
+#     return dataset
 
 def get_files_of_type(folder_path, file_type):
     res = []

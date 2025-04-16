@@ -5,12 +5,19 @@ HeinFishBehavior:
   type: image
   preprocessed: false
 
-Abby:
+AbbyFrames:
   path: /share/j_sun/jth264/abby
-  precomputed_path: /share/j_sun/jth264/abby_precomputed
   label_types: [onehot]
   type: image
   preprocessed: false
+
+AbbySlidingWindow:
+  path: /share/j_sun/jth264/abby
+  label_types: [onehot]
+  type: video
+  num_frames: 16
+  preprocessed: false
+
 
 HeinFishBehaviorSlidingWindow: 
   path: /share/j_sun/jth264/bites_frame_annotation_splitted
