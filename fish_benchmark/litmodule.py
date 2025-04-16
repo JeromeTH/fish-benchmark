@@ -45,12 +45,12 @@ class LitBinaryClassifierModule(L.LightningModule):
         #recall: for each class, how many of the actual positives are predicted as positive
         true_labels_count = y.sum()
         pos_labeles_count = preds.sum()
-        recall = (preds * y).sum() / true_labels_count.clamp(min=1)
+        recall = (preds * y).sum() / true_labels_count if true_labels_count > 0 else torch.tensor(-1)
         self.log(f'{prefix}_recall', recall)
-        precision = (preds * y).sum() / pos_labeles_count.clamp(min=1)
+        precision = (preds * y).sum() / pos_labeles_count if pos_labeles_count > 0 else torch.tensor(-1)
         self.log(f'{prefix}_precision', precision)
 
-        f1 = 2 * (precision * recall) / (precision + recall).clamp(min=1)
+        f1 = 2 * (precision * recall) / (precision + recall).clamp(min=1) if true_labels_count > 0 and pos_labeles_count > 0 and precision + recall > 0 else torch.tensor(-1)
         self.log(f'{prefix}_f1', f1)
         #accuracy: what is the proportion of the labels that are predicted correctly
         acc = (preds == y).float().mean()

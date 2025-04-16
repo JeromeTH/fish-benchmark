@@ -19,7 +19,7 @@ def get_args():
     parser.add_argument("--label_type", default='onehot')
     parser.add_argument("--epochs", default=20)
     parser.add_argument("--lr", default=.00005)
-    parser.add_argument("--batch_size", default=32)
+    parser.add_argument("--batch_size", default=64)
 
     return parser.parse_args()
 
