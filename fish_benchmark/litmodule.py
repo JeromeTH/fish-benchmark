@@ -57,6 +57,32 @@ class LitBinaryClassifierModule(L.LightningModule):
         for i, acc in enumerate(per_class_accuracy):
             if per_class_pos_count[i] > 0: 
                 self.log(f'{prefix}_class_{i}_accuracy', acc / per_class_pos_count[i])
+
+                
+        #diagnose error typesS
+        if ((preds == 0) & (y == 0)).sum() == 0:
+            both_zero = 0
+        else:
+            both_zero = ((preds == 0) & (y == 0)).sum() / preds.numel()
+        self.log(f'{prefix}_true 0, predicted 0', both_zero)
+
+        if ((preds == 0) & (y == 1)).sum() == 0:
+            pred0_true1 = 0
+        else:
+            pred0_true1 = ((preds == 0) & (y == 1)).sum() / preds.numel()
+        self.log(f'{prefix}_true 1, predicted 0', pred0_true1)
+
+        if ((preds == 1) & (y == 0)).sum() == 0:
+            pred1_true0 = 0
+        else:
+            pred1_true0 = ((preds == 1) & (y == 0)).sum() / preds.numel()
+        self.log(f'{prefix}_true 0, predicted 1', pred1_true0)
+
+        if ((preds == 1) & (y == 1)).sum() == 0:
+            both_one = 0
+        else:
+            both_one = ((preds == 1) & (y == 1)).sum() / preds.numel()
+        self.log(f'{prefix}_true 1, predicted 1', both_one)
         
 
     def shared_step(self, batch, prefix):
