@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader, IterableDataset
+from torch.utils.data import Dataset, DataLoader, IterableDataset, TensorDataset
 import os
 import av
 import numpy as np
@@ -158,6 +158,15 @@ def parse_annotation(annotation):
         behaviors.append(event['behavior']['name'])
     return behaviors
 
+def get_sample_indices(lst_len, clip_len, sample_method = "even-spaced"):
+    if sample_method == "even-spaced":
+        indices = np.linspace(0, lst_len - 1, clip_len).astype(int)
+    elif sample_method == "random":
+        indices = np.random.choice(lst_len, clip_len, replace=False)
+    else:
+        raise ValueError(f"sample_method {sample_method} not recognized.")
+    return indices
+
 class BaseSlidingWindowDataset():
     def __init__(self, 
                  input_transform: callable=None, 
@@ -168,7 +177,8 @@ class BaseSlidingWindowDataset():
                  samples_per_window: int= 16, 
                  step_size = 1, 
                  categories: list = None, 
-                 is_image_dataset = False):
+                 is_image_dataset = False, 
+                 shuffle = False):
         self.input_transform = input_transform
         self.annotation_to_label = annotation_to_label
         self.label_type = label_type
@@ -181,10 +191,14 @@ class BaseSlidingWindowDataset():
         self.categories = categories
         self.samples_per_window = samples_per_window
         self.is_image_dataset = is_image_dataset
-        if self.is_image_dataset: assert self.window_size ==1, "window size should be 1 for image datasets"
+        if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
+        self.shuffle = shuffle
 
 
-    def _scan(self, annotated_video_frames):
+    def create_video_dataset(self, annotated_video_frames):
+        clips = []
+        labels = []
+
         seen_images = []
         seen_annotations = []
         for i, (image, annotation) in enumerate(annotated_video_frames):
@@ -212,10 +226,20 @@ class BaseSlidingWindowDataset():
             if self.is_image_dataset: clip = clip.squeeze()
 
             unioned_labels = torch.any(relevant_labels.bool(), dim=0).float()
-            yield clip, unioned_labels
+            clips.append(clip)
+            labels.append(unioned_labels)
+        
+        clips = torch.stack(clips)
+        labels = torch.stack(labels)
+        if self.shuffle: 
+            perm = torch.randperm(len(clips))
+            clips = clips[perm]
+            labels = labels[perm]
+
+        return TensorDataset(clips, labels)
         
 class MaxDataset(IterableDataset, BaseSlidingWindowDataset):
-    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False):
+    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False):
         self.path = os.path.join(path, "train" if train else "test")
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         BaseSlidingWindowDataset.__init__(
@@ -228,7 +252,8 @@ class MaxDataset(IterableDataset, BaseSlidingWindowDataset):
             samples_per_window=samples_per_window,
             step_size=step_size,
             categories=list(self.behavior_idx_map.keys()), 
-            is_image_dataset=is_image_dataset         
+            is_image_dataset=is_image_dataset,
+            shuffle=shuffle  
         )
 
     def __iter__(self):
@@ -238,11 +263,13 @@ class MaxDataset(IterableDataset, BaseSlidingWindowDataset):
             tar_batches.sort()
             tar_file_paths = [os.path.join(self.path, video, tar_batch) for tar_batch in tar_batches]
             video_frames = wds.WebDataset(tar_file_paths).decode("pil").to_tuple("png", "json")
-            yield from self._scan(video_frames)
+            dataset = self.create_video_dataset(video_frames)
+            for clip, label in dataset: 
+                yield clip, label
 
 
 class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
-    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False):
+    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False):
         self.path = os.path.join(path, "train" if train else "test")
         cur_dir = os.path.dirname(os.path.abspath(__file__))
         full_path = os.path.join(cur_dir, 'abby_dset_categories.json')
@@ -258,7 +285,8 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
             samples_per_window=samples_per_window,
             step_size=step_size,
             categories=self.categories,    
-            is_image_dataset=is_image_dataset       
+            is_image_dataset=is_image_dataset, 
+            shuffle=shuffle       
         )
 
     def __iter__(self):
@@ -276,7 +304,9 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
                     for i, frame in enumerate(container.decode(video=0)):
                         yield frame.to_image(), label[i]
 
-                yield from self._scan(annotated_frame_iterator())
+                dataset = self.create_video_dataset(annotated_frame_iterator())
+                for clip, label in dataset:
+                    yield clip, label
 
 # @contextmanager
 # def step_timer(name):
@@ -331,7 +361,7 @@ class PrecomputedDataset(IterableDataset):
                 frame = self.transform(frame)
             yield frame, label
 
-def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None):
+def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, shuffle = False):
     if dataset_name == 'UCF101':
         dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'Caltech101':
@@ -347,7 +377,8 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             tolerance_region = 0,
             samples_per_window = 1,
             step_size = 1, 
-            is_image_dataset=True
+            is_image_dataset=True, 
+            shuffle = shuffle
         )
     elif dataset_name == 'HeinFishBehaviorSlidingWindow':
         # dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type, train=train)
@@ -360,7 +391,8 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             tolerance_region = 7,
             samples_per_window = 16,
             step_size = 1, 
-            is_image_dataset=False
+            is_image_dataset=False, 
+            shuffle = shuffle
         )
     elif dataset_name == 'AbbyFrames':
         dataset = AbbyDataset(
@@ -372,7 +404,8 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             tolerance_region = 0,
             samples_per_window = 1,
             step_size=1, 
-            is_image_dataset=True
+            is_image_dataset=True, 
+            shuffle = shuffle
         )
     elif dataset_name == 'AbbySlidingWindow':
         dataset = AbbyDataset(
@@ -384,7 +417,8 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             tolerance_region = 7,
             samples_per_window = 16,
             step_size=1, 
-            is_image_dataset=False
+            is_image_dataset=False, 
+            shuffle = shuffle
         )
     elif dataset_name == 'HeinFishBehaviorPrecomputed': 
         dataset = PrecomputedDataset(path, model_name=model_name, transform=augs, train=train)

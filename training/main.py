@@ -19,8 +19,8 @@ def get_args():
     parser.add_argument("--label_type", default='onehot')
     parser.add_argument("--epochs", default=20)
     parser.add_argument("--lr", default=.00005)
-    parser.add_argument("--batch_size", default=32)
-    parser.add_argument("--step_size", default=1)
+    parser.add_argument("--batch_size", default=64)
+    parser.add_argument("--shuffle", default=True)
 
     return parser.parse_args()
 
@@ -33,6 +33,7 @@ if __name__ == '__main__':
     EPOCHS = args.epochs
     LEARNING_RATE = args.lr
     BATCH_SIZE = args.batch_size
+    SHUFFLE = args.shuffle
 
     dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
     model_config = yaml.safe_load(open('config/models.yml', 'r'))
@@ -48,7 +49,7 @@ if __name__ == '__main__':
         entity = "fish-benchmark",
         notes="Freezing the model parameters and only tuning the classifier head",
         tags=[PRETRAINED_MODEL, CLASSIFIER, DATASET, LABEL_TYPE],
-        config={"epochs": EPOCHS, "learning_rate": LEARNING_RATE, "batch_size": BATCH_SIZE, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET},
+        config={"epochs": EPOCHS, "learning_rate": LEARNING_RATE, "batch_size": BATCH_SIZE, "optimizer": "adam", "classifier": CLASSIFIER, "dataset": DATASET, "label_type": LABEL_TYPE, "shuffle": SHUFFLE},
         dir="./logs"
     ) as run:
         wandb_logger = WandbLogger(
@@ -62,13 +63,15 @@ if __name__ == '__main__':
                                     augs = get_input_transform(PRETRAINED_MODEL) if not dataset_config[DATASET]['preprocessed'] else None, 
                                     train=True, 
                                     label_type=LABEL_TYPE, 
-                                    model_name=PRETRAINED_MODEL)
+                                    model_name=PRETRAINED_MODEL, 
+                                    shuffle=SHUFFLE)
         test_dataset = get_dataset(DATASET, 
                                    dataset_config[DATASET]['path'], 
                                    augs = get_input_transform(PRETRAINED_MODEL) if not dataset_config[DATASET]['preprocessed'] else None, 
                                    train=False, 
                                    label_type=LABEL_TYPE, 
-                                   model_name=PRETRAINED_MODEL)
+                                   model_name=PRETRAINED_MODEL, 
+                                   shuffle=SHUFFLE)
     
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=7)
