@@ -87,5 +87,6 @@ if __name__ == '__main__':
         lit_module = get_lit_module(model, learning_rate=run.config['learning_rate'], label_type=LABEL_TYPE)
         trainer = L.Trainer(max_epochs=run.config['epochs'], logger=wandb_logger)
         trainer.fit(lit_module, train_dataloader, val_dataloaders=test_dataloader)
+        wandb.log({"test": 12})
         trainer.test(lit_module, test_dataloader)
         trainer.save_checkpoint(f"{PRETRAINED_MODEL}_model.ckpt")
