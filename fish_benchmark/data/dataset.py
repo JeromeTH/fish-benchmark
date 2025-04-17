@@ -218,6 +218,8 @@ class BaseSlidingWindowDataset():
             relevant_annotations = seen_annotations[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
             relevant_labels = torch.stack([self.annotation_to_label(annotation) for annotation in relevant_annotations]) 
             assert relevant_labels.shape == (len(relevant_annotations), len(self.categories)), f"relevant_labels shape {relevant_labels.shape} does not match relevant_annotations shape {relevant_annotations.shape}"
+            
+            #turn clip into a tensor
             if self.input_transform:
                 clip = self.input_transform(clip)
             else: 
@@ -228,6 +230,10 @@ class BaseSlidingWindowDataset():
             unioned_labels = torch.any(relevant_labels.bool(), dim=0).float()
             clips.append(clip)
             labels.append(unioned_labels)
+
+        if len(clips) == 0:
+            #if the clips is less than the window size
+            return TensorDataset(torch.empty(0), torch.empty(0))
         
         clips = torch.stack(clips)
         labels = torch.stack(labels)
@@ -300,6 +306,7 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
                 container = av.open(track_path)
                 label = np.loadtxt(label_path, delimiter='\t', dtype=int)
                 assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
+                print(f"iterating over {track_path} with {label.shape[0]} frames")
                 def annotated_frame_iterator():
                     for i, frame in enumerate(container.decode(video=0)):
                         yield frame.to_image(), label[i]
