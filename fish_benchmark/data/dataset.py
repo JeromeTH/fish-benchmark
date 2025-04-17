@@ -3,7 +3,6 @@ import torch
 from torch.utils.data import Dataset, DataLoader, IterableDataset, TensorDataset
 import os
 import av
-import numpy as np
 from fish_benchmark.utils import read_video_pyav, sample_frame_indices
 from torchvision.datasets import Caltech101
 from torch.utils.data import Subset
@@ -16,6 +15,7 @@ import time
 from contextlib import contextmanager
 from torchvision import transforms
 import yaml
+from fish_benchmark.debug import serialized_size
 
 class BaseCategoricalDataset(Dataset):
     @property
@@ -213,7 +213,7 @@ class BaseSlidingWindowDataset():
                 continue
             
             gap = int(self.window_size/self.samples_per_window)
-            clip = np.stack([img for img in seen_images[-self.window_size::gap]])
+            clip = np.stack([img.copy() for img in seen_images[-self.window_size::gap]])
             mid_idx = i - int(self.window_size/2)
             relevant_annotations = seen_annotations[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
             relevant_labels = torch.stack([self.annotation_to_label(annotation) for annotation in relevant_annotations]) 
@@ -225,6 +225,11 @@ class BaseSlidingWindowDataset():
             else: 
                 clip = torch.from_numpy(clip)
 
+            size = serialized_size(clip)
+            print("clip serialized size:", size)
+            size = serialized_size(torch.randn(16, 3, 224, 224))
+            print(f"Serialized size: {size} bytes")
+
             if self.is_image_dataset: clip = clip.squeeze()
 
             unioned_labels = torch.any(relevant_labels.bool(), dim=0).float()
@@ -235,14 +240,15 @@ class BaseSlidingWindowDataset():
             #if the clips is less than the window size
             return TensorDataset(torch.empty(0), torch.empty(0))
         
-        clips = torch.stack(clips)
-        labels = torch.stack(labels)
+        stacked_clips = torch.stack(clips)
+        stacked_labels = torch.stack(labels)
+        
         if self.shuffle: 
             perm = torch.randperm(len(clips))
             clips = clips[perm]
             labels = labels[perm]
 
-        return TensorDataset(clips, labels)
+        return TensorDataset(stacked_clips, stacked_labels)
         
 class MaxDataset(IterableDataset, BaseSlidingWindowDataset):
     def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False):
@@ -306,7 +312,7 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
                 container = av.open(track_path)
                 label = np.loadtxt(label_path, delimiter='\t', dtype=int)
                 assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
-                print(f"iterating over {track_path} with {label.shape[0]} frames")
+                # print(f"iterating over {track_path} with {label.shape[0]} frames")
                 def annotated_frame_iterator():
                     for i, frame in enumerate(container.decode(video=0)):
                         yield frame.to_image(), label[i]
@@ -315,12 +321,6 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
                 for clip, label in dataset:
                     yield clip, label
 
-# @contextmanager
-# def step_timer(name):
-#     start = time.time()
-#     yield
-#     end = time.time()
-#     print(f"[{name}] took {end - start:.6f} seconds")
 
 class PrecomputedDataset(IterableDataset):
     def __init__(self, path, model_name, transform=None, train=True):

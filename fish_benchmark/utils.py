@@ -5,6 +5,8 @@ import webdataset as wds
 import json
 import re
 import logging
+import time
+from contextlib import contextmanager
 
 def read_video_pyav(container, indices):
     '''

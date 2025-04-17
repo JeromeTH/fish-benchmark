@@ -19,7 +19,7 @@ def get_args():
     parser.add_argument("--label_type", default='onehot')
     parser.add_argument("--epochs", default=20)
     parser.add_argument("--lr", default=.00005)
-    parser.add_argument("--batch_size", default=64)
+    parser.add_argument("--batch_size", default=32)
     parser.add_argument("--shuffle", default=True)
 
     return parser.parse_args()
@@ -41,7 +41,7 @@ if __name__ == '__main__':
     assert(LABEL_TYPE in dataset_config[DATASET]['label_types']), f"Label type {LABEL_TYPE} not supported for dataset {DATASET}"
     available_gpus = torch.cuda.device_count()
     print(f"Available GPUs: {available_gpus}")
-    PROJECT = f"{PRETRAINED_MODEL}_training"
+    PROJECT = f"{DATASET}_training"
     print(type(dataset_config[DATASET]['preprocessed']))
 
     with wandb.init(
@@ -74,8 +74,8 @@ if __name__ == '__main__':
                                    shuffle=SHUFFLE)
     
         print("Data loaded.")
-        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=7)
-        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'], num_workers=7)
+        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=0)
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'], num_workers=0)
         
         model = MediaClassifier(
             num_classes=len(train_dataset.categories), 
@@ -85,7 +85,7 @@ if __name__ == '__main__':
         )
 
         lit_module = get_lit_module(model, learning_rate=run.config['learning_rate'], label_type=LABEL_TYPE)
-        trainer = L.Trainer(max_epochs=run.config['epochs'], logger=wandb_logger)
+        trainer = L.Trainer(max_epochs=run.config['epochs'], logger=wandb_logger, log_every_n_steps= 10)
         trainer.fit(lit_module, train_dataloader, val_dataloaders=test_dataloader)
         wandb.log({"test": 12})
         trainer.test(lit_module, test_dataloader)

@@ -7,12 +7,14 @@ HeinFishBehavior:
 
 AbbyFrames:
   path: /share/j_sun/jth264/abby
+  precomputed_path: /share/j_sun/jth264/abby_precomputed
   label_types: [onehot]
   type: image
   preprocessed: false
 
 AbbySlidingWindow:
   path: /share/j_sun/jth264/abby
+  precomputed_path: /share/j_sun/jth264/abby_precomputed
   label_types: [onehot]
   type: video
   num_frames: 16
