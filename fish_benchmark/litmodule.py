@@ -49,6 +49,32 @@ class LitBinaryClassifierModule(L.LightningModule):
         self.log(f'{prefix}_recall', recall)
         precision = (preds * y).sum() / pos_labeles_count.clamp(min=1)
         self.log(f'{prefix}_precision', precision)
+      
+        #diagnose error typesS
+        if ((preds == 0) & (y == 0)).sum() == 0:
+            both_zero = 0
+        else:
+            both_zero = ((preds == 0) & (y == 0)).sum() / preds.numel()
+        self.log(f'{prefix}_true 0, predicted 0', both_zero)
+
+        if ((preds == 0) & (y == 1)).sum() == 0:
+            pred0_true1 = 0
+        else:
+            pred0_true1 = ((preds == 0) & (y == 1)).sum() / preds.numel()
+        self.log(f'{prefix}_true 1, predicted 0', pred0_true1)
+
+        if ((preds == 1) & (y == 0)).sum() == 0:
+            pred1_true0 = 0
+        else:
+            pred1_true0 = ((preds == 1) & (y == 0)).sum() / preds.numel()
+        self.log(f'{prefix}_true 0, predicted 1', pred1_true0)
+
+        if ((preds == 1) & (y == 1)).sum() == 0:
+            both_one = 0
+        else:
+            both_one = ((preds == 1) & (y == 1)).sum() / preds.numel()
+        self.log(f'{prefix}_true 1, predicted 1', both_one)
+
 
         f1 = 2 * (precision * recall) / (precision + recall).clamp(min=1)
         self.log(f'{prefix}_f1', f1)

@@ -20,6 +20,7 @@ def get_args():
     parser.add_argument("--epochs", default=20)
     parser.add_argument("--lr", default=.00005)
     parser.add_argument("--batch_size", default=32)
+    parser.add_argument("--step_size", default=1)
 
     return parser.parse_args()
 
@@ -83,5 +84,6 @@ if __name__ == '__main__':
         lit_module = get_lit_module(model, learning_rate=run.config['learning_rate'], label_type=LABEL_TYPE)
         trainer = L.Trainer(max_epochs=run.config['epochs'], logger=wandb_logger)
         trainer.fit(lit_module, train_dataloader, val_dataloaders=test_dataloader)
+        wandb.log({"test": 12})
         trainer.test(lit_module, test_dataloader)
         trainer.save_checkpoint(f"{PRETRAINED_MODEL}_model.ckpt")
