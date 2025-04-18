@@ -40,26 +40,8 @@ if __name__ == "__main__":
                     frame_save_path = mkdir(os.path.join(save_path, 'frames'))
                     label_save_path = mkdir(os.path.join(save_path, 'labels'))
                     for id, (image, label) in tqdm(enumerate(dataset), desc=f"Precomputing {DSET} for {MODEL}"):
-                        with step_timer(f"joining path {id}"):
-                            print(image.shape) #[16, 3, 224, 224]
-                            print(label.shape) #[2]
-                            print(image.device)  # should be 'cpu'
-                            print(label.device)
-                            frame_file = os.path.join(frame_save_path, f'{id}.pt')
-                            label_file = os.path.join(label_save_path, f'{id}.pt')
-                        with step_timer(f"test saving {id}"):
-                            x = torch.randn(16, 3, 224, 224)
-                            print_info(x)
-                            print_info(image)
-                            print("x serialized size:", serialized_size(x))
-                            print("image serialized size:", serialized_size(image))
-                            print("image.storage().size():", image.storage().size())
-                            print("image.numel():", image.numel())
-                            torch.save(image, "/share/j_sun/jth264/test.pt")
-
-                        with step_timer(f"saving {id}"):
-                            torch.save(image, os.path.join(frame_save_path, f'{id}.pt'))
-                            torch.save(label, os.path.join(label_save_path, f'{id}.pt'))
+                            torch.save(image.clone(), os.path.join(frame_save_path, f'{id}.pt'))
+                            torch.save(label.clone(), os.path.join(label_save_path, f'{id}.pt'))
 
                 except Exception as e:
                     logger.exception(f"Error precomputing dataset {DSET} for model {MODEL}: {e}")

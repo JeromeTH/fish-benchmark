@@ -41,7 +41,8 @@ if __name__ == '__main__':
     assert(LABEL_TYPE in dataset_config[DATASET]['label_types']), f"Label type {LABEL_TYPE} not supported for dataset {DATASET}"
     available_gpus = torch.cuda.device_count()
     print(f"Available GPUs: {available_gpus}")
-    PROJECT = f"{DATASET}_training"
+
+    PROJECT = f"{dataset_config[DATASET]['training_project']}_training"
     print(type(dataset_config[DATASET]['preprocessed']))
 
     with wandb.init(
@@ -74,8 +75,8 @@ if __name__ == '__main__':
                                    shuffle=SHUFFLE)
     
         print("Data loaded.")
-        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=0)
-        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'], num_workers=0)
+        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=7)
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'], num_workers=7)
         
         model = MediaClassifier(
             num_classes=len(train_dataset.categories), 

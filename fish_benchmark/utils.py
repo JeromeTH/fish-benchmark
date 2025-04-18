@@ -88,7 +88,7 @@ def get_files_of_type(folder_path, file_type):
     res = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
-            if file.lower().endswith(file_type):
+            if file.lower().endswith(file_type) and not file.startswith("._"):
                 res.append(os.path.join(root, file))
     return res
 

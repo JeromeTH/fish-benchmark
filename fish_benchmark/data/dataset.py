@@ -213,22 +213,18 @@ class BaseSlidingWindowDataset():
                 continue
             
             gap = int(self.window_size/self.samples_per_window)
-            clip = np.stack([img.copy() for img in seen_images[-self.window_size::gap]])
+            clip = np.stack([img for img in seen_images[-self.window_size::gap]])
             mid_idx = i - int(self.window_size/2)
             relevant_annotations = seen_annotations[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
             relevant_labels = torch.stack([self.annotation_to_label(annotation) for annotation in relevant_annotations]) 
-            assert relevant_labels.shape == (len(relevant_annotations), len(self.categories)), f"relevant_labels shape {relevant_labels.shape} does not match relevant_annotations shape {relevant_annotations.shape}"
+            relevant_labels = relevant_labels[:, :len(self.categories)] #drop extra incomplete labels
+            assert relevant_labels.shape == (len(relevant_annotations), len(self.categories)), f"relevant_labels shape {relevant_labels.shape} does not match relevant_annotations shape [{len(relevant_annotations)}, {len(self.categories)}]"
             
             #turn clip into a tensor
             if self.input_transform:
                 clip = self.input_transform(clip)
             else: 
                 clip = torch.from_numpy(clip)
-
-            size = serialized_size(clip)
-            print("clip serialized size:", size)
-            size = serialized_size(torch.randn(16, 3, 224, 224))
-            print(f"Serialized size: {size} bytes")
 
             if self.is_image_dataset: clip = clip.squeeze()
 
@@ -303,12 +299,24 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
 
     def __iter__(self):
         for annotation_path in os.listdir(self.path):
+            # print(annotation_path)
+            # print(get_files_of_type(os.path.join(self.path, annotation_path), ".mp4"))
             track_paths = sorted(get_files_of_type(os.path.join(self.path, annotation_path), ".mp4"))
             label_paths = sorted(get_files_of_type(os.path.join(self.path, annotation_path), ".txt"))
-            assert len(track_paths) == len(label_paths), f"Number of tracks and annotations do not match in {annotation_path}"
-            for track_path, label_path in zip(track_paths, label_paths):
-                assert os.path.splitext(os.path.basename(track_path))[0] == os.path.splitext(os.path.basename(label_path))[0], \
-                f"Mismatched file names: {track_path} vs {label_path}"
+            label_dict = {
+                os.path.splitext(os.path.basename(p))[0]: p
+                for p in label_paths
+            }
+            # print(track_paths)
+            for track_path in track_paths:
+                # print(f"Processing {track_path}")
+                track_name = os.path.splitext(os.path.basename(track_path))[0]
+                # print(f"Processing {track_name}")
+                label_path = label_dict.get(track_name)
+                if label_path is None:
+                    # print(f"Warning: No label file found for {track_path}. Skipping.")
+                    continue
+                
                 container = av.open(track_path)
                 label = np.loadtxt(label_path, delimiter='\t', dtype=int)
                 assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
@@ -323,7 +331,7 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
 
 
 class PrecomputedDataset(IterableDataset):
-    def __init__(self, path, model_name, transform=None, train=True):
+    def __init__(self, path, model_name, categories, transform=None, train=True):
         self.label_type = "onehot"
         TYPE = "train" if train else "test"
         self.path = os.path.join(path, model_name, TYPE)
@@ -341,8 +349,7 @@ class PrecomputedDataset(IterableDataset):
                 raise ValueError(f"Model type {model_type} not recognized.")
             
         self.transform = transform
-        self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
-        self.categories = list(self.behavior_idx_map.keys())
+        self.categories = categories
 
     def __len__(self):
         frames_path = os.path.join(self.path, "frames")
@@ -428,9 +435,18 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             shuffle = shuffle
         )
     elif dataset_name == 'HeinFishBehaviorPrecomputed': 
-        dataset = PrecomputedDataset(path, model_name=model_name, transform=augs, train=train)
+        behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
+        categories = list(behavior_idx_map.keys())
+        dataset = PrecomputedDataset(path, model_name=model_name, categories=categories, transform=augs, train=train)
     elif dataset_name == 'HeinFishBehaviorSlidingWindowPrecomputed':
-        dataset = PrecomputedDataset(path, model_name=model_name, transform=augs, train=train)
+        behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
+        categories = list(behavior_idx_map.keys())
+        dataset = PrecomputedDataset(path, model_name=model_name, categories=categories, transform=augs, train=train)
+    elif dataset_name == 'AbbySlidingWindowPrecomputed':
+        cur_dir = os.path.dirname(os.path.abspath(__file__))
+        full_path = os.path.join(cur_dir, 'abby_dset_categories.json')
+        categories = json.load(open(full_path, 'r'))
+        dataset = PrecomputedDataset(path, model_name=model_name, categories=categories, transform=augs, train=train)
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
     return dataset

@@ -4,6 +4,7 @@ HeinFishBehavior:
   label_types: [onehot]
   type: image
   preprocessed: false
+  training_project: "HeinFishBehavior"
 
 AbbyFrames:
   path: /share/j_sun/jth264/abby
@@ -11,6 +12,7 @@ AbbyFrames:
   label_types: [onehot]
   type: image
   preprocessed: false
+  training_project: "AbbyFrames"
 
 AbbySlidingWindow:
   path: /share/j_sun/jth264/abby
@@ -19,6 +21,15 @@ AbbySlidingWindow:
   type: video
   num_frames: 16
   preprocessed: false
+  training_project: "AbbySlidingWindow"
+
+AbbySlidingWindowPrecomputed:
+  path: /share/j_sun/jth264/abby_precomputed
+  label_types: [onehot]
+  type: video
+  num_frames: 16
+  preprocessed: true
+  training_project: "AbbySlidingWindow"
 
 
 HeinFishBehaviorSlidingWindow: 
@@ -28,6 +39,7 @@ HeinFishBehaviorSlidingWindow:
   type: video
   num_frames: 16
   preprocessed: false
+  training_project: "HeinFishBehaviorSlidingWindow"
 
 UCF101:
   path: /share/j_sun/jth264/UCF101_subset
@@ -36,6 +48,7 @@ UCF101:
   type: video
   num_frames: 16
   preprocessed: false
+  training_project: "UCF101"
   
 Caltech101: 
   path: /share/j_sun/jth264/Caltech101
@@ -43,12 +56,14 @@ Caltech101:
   label_types: [categorical, onehot]
   type: image
   preprocessed: false
+  training_project: "Caltech101"
 
 HeinFishBehaviorPrecomputed: 
   path: /share/j_sun/jth264/bites_frame_annotation_precomputed
   label_types: [onehot]
   type: image
   preprocessed: true
+  training_project: "HeinFishBehavior"
 
 HeinFishBehaviorSlidingWindowPrecomputed:
   path: /share/j_sun/jth264/bites_frame_annotation_clips_precomputed
@@ -56,3 +71,4 @@ HeinFishBehaviorSlidingWindowPrecomputed:
   type: video
   num_frames: 16
   preprocessed: true
+  training_project: "HeinFishBehaviorSlidingWindow"

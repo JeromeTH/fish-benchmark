@@ -56,7 +56,7 @@ class LitBinaryClassifierModule(L.LightningModule):
         per_class_accuracy = (preds == y).float().mean(dim=0)
         for i, acc in enumerate(per_class_accuracy):
             if per_class_pos_count[i] > 0: 
-                self.log(f'{prefix}_class_{i}_accuracy', acc / per_class_pos_count[i])
+                self.log(f'{prefix}_class_{i}_accuracy', acc)
 
                 
         #diagnose error typesS
