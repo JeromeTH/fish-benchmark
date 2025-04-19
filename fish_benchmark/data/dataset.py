@@ -236,15 +236,15 @@ class BaseSlidingWindowDataset():
             #if the clips is less than the window size
             return TensorDataset(torch.empty(0), torch.empty(0))
         
-        stacked_clips = torch.stack(clips)
-        stacked_labels = torch.stack(labels)
+        clips = torch.stack(clips)
+        labels = torch.stack(labels)
         
         if self.shuffle: 
             perm = torch.randperm(len(clips))
             clips = clips[perm]
             labels = labels[perm]
 
-        return TensorDataset(stacked_clips, stacked_labels)
+        return TensorDataset(clips, labels)
         
 class MaxDataset(IterableDataset, BaseSlidingWindowDataset):
     def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False):

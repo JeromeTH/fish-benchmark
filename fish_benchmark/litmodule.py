@@ -60,29 +60,29 @@ class LitBinaryClassifierModule(L.LightningModule):
 
                 
         #diagnose error typesS
-        if ((preds == 0) & (y == 0)).sum() == 0:
-            both_zero = 0
-        else:
-            both_zero = ((preds == 0) & (y == 0)).sum() / preds.numel()
-        self.log(f'{prefix}_true 0, predicted 0', both_zero)
+        # if ((preds == 0) & (y == 0)).sum() == 0:
+        #     both_zero = 0
+        # else:
+        #     both_zero = ((preds == 0) & (y == 0)).sum() / preds.numel()
+        # self.log(f'{prefix}_true 0, predicted 0', both_zero)
 
-        if ((preds == 0) & (y == 1)).sum() == 0:
-            pred0_true1 = 0
-        else:
-            pred0_true1 = ((preds == 0) & (y == 1)).sum() / preds.numel()
-        self.log(f'{prefix}_true 1, predicted 0', pred0_true1)
+        # if ((preds == 0) & (y == 1)).sum() == 0:
+        #     pred0_true1 = 0
+        # else:
+        #     pred0_true1 = ((preds == 0) & (y == 1)).sum() / preds.numel()
+        # self.log(f'{prefix}_true 1, predicted 0', pred0_true1)
 
-        if ((preds == 1) & (y == 0)).sum() == 0:
-            pred1_true0 = 0
-        else:
-            pred1_true0 = ((preds == 1) & (y == 0)).sum() / preds.numel()
-        self.log(f'{prefix}_true 0, predicted 1', pred1_true0)
+        # if ((preds == 1) & (y == 0)).sum() == 0:
+        #     pred1_true0 = 0
+        # else:
+        #     pred1_true0 = ((preds == 1) & (y == 0)).sum() / preds.numel()
+        # self.log(f'{prefix}_true 0, predicted 1', pred1_true0)
 
-        if ((preds == 1) & (y == 1)).sum() == 0:
-            both_one = 0
-        else:
-            both_one = ((preds == 1) & (y == 1)).sum() / preds.numel()
-        self.log(f'{prefix}_true 1, predicted 1', both_one)
+        # if ((preds == 1) & (y == 1)).sum() == 0:
+        #     both_one = 0
+        # else:
+        #     both_one = ((preds == 1) & (y == 1)).sum() / preds.numel()
+        # self.log(f'{prefix}_true 1, predicted 1', both_one)
         
 
     def shared_step(self, batch, prefix):
@@ -102,6 +102,9 @@ class LitBinaryClassifierModule(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         return self.shared_step(batch, 'train')
+    
+    def validation_step(self, batch, batch_idx):
+        return self.shared_step(batch, 'val')
     
     def test_step(self, batch, batch_idx):
         return self.shared_step(batch, 'test')

@@ -10,6 +10,7 @@ from pytorch_lightning.loggers import WandbLogger
 import wandb
 import yaml
 import argparse
+from lightning.pytorch.callbacks import ModelCheckpoint
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -17,7 +18,7 @@ def get_args():
     parser.add_argument("--classifier", default="mlp")
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--label_type", default='onehot')
-    parser.add_argument("--epochs", default=20)
+    parser.add_argument("--epochs", default=1)
     parser.add_argument("--lr", default=.00005)
     parser.add_argument("--batch_size", default=32)
     parser.add_argument("--shuffle", default=True)
@@ -56,7 +57,7 @@ if __name__ == '__main__':
         wandb_logger = WandbLogger(
             project=run.project,    
             save_dir="./logs",
-            log_model=True
+            log_model="best"
         )
         print("Loading data...")
         train_dataset = get_dataset(DATASET, 
@@ -85,9 +86,33 @@ if __name__ == '__main__':
             freeze_pretrained=True,
         )
 
+        checkpoint_callback = ModelCheckpoint(
+            monitor="val_loss",
+            save_top_k=1,
+            mode="min",
+            dirpath=f"./checkpoints/{run.id}",
+            filename="best-{epoch:02d}-{val_loss:.2f}",
+        )
+
         lit_module = get_lit_module(model, learning_rate=run.config['learning_rate'], label_type=LABEL_TYPE)
-        trainer = L.Trainer(max_epochs=run.config['epochs'], logger=wandb_logger, log_every_n_steps= 10)
+        trainer = L.Trainer(max_epochs=run.config['epochs'], 
+                            logger=wandb_logger, 
+                            log_every_n_steps= 10, 
+                            callbacks=[checkpoint_callback], 
+                            val_check_interval=100, 
+                            limit_val_batches=1 )
+        
         trainer.fit(lit_module, train_dataloader, val_dataloaders=test_dataloader)
-        wandb.log({"test": 12})
-        trainer.test(lit_module, test_dataloader)
-        trainer.save_checkpoint(f"{PRETRAINED_MODEL}_model.ckpt")
+
+        if checkpoint_callback.best_model_path:
+            artifact = wandb.Artifact(
+                name=f"model-{run.id}",
+                type="model",
+                metadata={
+                    "tags": run.tags,
+                    "config": dict(run.config),
+                    "notes": run.notes
+                }
+            )
+            artifact.add_file(checkpoint_callback.best_model_path)
+            run.log_artifact(artifact)
