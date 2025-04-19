@@ -186,7 +186,7 @@ class BaseSlidingWindowDataset():
                  categories: list = None, 
                  is_image_dataset = False, 
                  shuffle = False,
-                 patch_per_sample = False):
+                 patch_grid_dim = 1):
         self.input_transform = input_transform
         self.annotation_to_label = annotation_to_label
         self.label_type = label_type
@@ -201,18 +201,18 @@ class BaseSlidingWindowDataset():
         self.is_image_dataset = is_image_dataset
         if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
         self.shuffle = shuffle
-        self.patch_per_sample = patch_per_sample
-        self.MAX_BUFFER_SIZE = 1000 # max amount of 224*224 frames to keep in memory for before being shuffled
+        self.patch_grid_dim = patch_grid_dim
+        self.MAX_BUFFER_SIZE = 100 # max amount of 224*224 frames to keep in memory for before being shuffled, keeping it small first
 
 
-        self.seen_images = []
-        self.seen_annotations = []
+        self.image_arrays_buffer = []
+        self.annotations_buffer = []
         self.clips = []
         self.labels = []
 
     def clear_buffer(self):
-        self.seen_images = []
-        self.seen_annotations = []
+        self.image_arrays_buffer = []
+        self.annotations_buffer = []
         self.clips = []
         self.labels = []
 
@@ -236,9 +236,9 @@ class BaseSlidingWindowDataset():
         '''
         depending on the context of the current seen images, this may return a clip or None
         '''
-        self.seen_images.append(np.array(image.convert('RGB')))
-        self.seen_annotations.append(annotation)
-        if len(self.seen_images) >= self.window_size:
+        self.image_arrays_buffer.append(np.array(image.convert('RGB')))
+        self.annotations_buffer.append(annotation)
+        if len(self.image_arrays_buffer) >= self.window_size:
             self.clips.append(self.get_latest_clip())
             self.labels.append(self.get_latest_label())
 
@@ -247,17 +247,45 @@ class BaseSlidingWindowDataset():
             
 
     def get_latest_label(self):
-        last_idx = len(self.seen_annotations) - 1
+        last_idx = len(self.annotations_buffer) - 1
         mid_idx = last_idx - int(self.window_size/2)
-        relevant_annotations = self.seen_annotations[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
+        relevant_annotations = self.annotations_buffer[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
         relevant_labels = torch.stack([self.annotation_to_label(annotation) for annotation in relevant_annotations]) 
         relevant_labels = relevant_labels[:, :len(self.categories)] #drop extra incomplete labels
         unioned_labels = torch.any(relevant_labels.bool(), dim=0).float()
         return unioned_labels
 
+    def grid_patches(self, img):
+        '''
+        Given an image, return a list of patches based on the grid size.
+        img is a numpy array of shape (H, W, C)
+        
+        '''
+        H, W = img.shape[:2]
+
+        # Compute patch size based on grid
+        patch_h = H // self.patch_grid_dim
+        patch_w = W // self.patch_grid_dim
+
+        patches = []
+
+        for i in range(self.patch_grid_dim):
+            for j in range(self.patch_grid_dim):
+                y1 = i * patch_h
+                y2 = y1 + patch_h
+                x1 = j * patch_w
+                x2 = x1 + patch_w
+
+                patch = img[y1:y2, x1:x2]
+                patches.append(patch)
+
+        return patches
+
     def get_latest_clip(self):
         gap = int(self.window_size/self.samples_per_window)
-        clip = np.stack([img for img in self.seen_images[-self.window_size::gap]])
+        clip = np.stack([patch 
+                         for img in self.image_arrays_buffer[-self.window_size::gap] 
+                         for patch in self.grid_patches(img)])
         if self.input_transform:
                 clip = self.input_transform(clip)
         else: 
@@ -266,8 +294,15 @@ class BaseSlidingWindowDataset():
         return clip
 
     def scan(self, annotated_video_frames: Iterator):
+        '''
+        annotated_video_frames is a generator that yields (image, annotation) tuples
+        image is a PIL image
+        annotation is whatever the dataset annotation. One needs to implement the annotation_to_label function to convert it to a label
+        '''
         self.clear_buffer()
-        for image, annotation in annotated_video_frames:
+        for i, (image, annotation) in enumerate(annotated_video_frames):
+            # if i % 100 == 0:
+            #     print(f"Processed {i} frames")
             yield from self.handle_item(image, annotation)
 
 
@@ -291,11 +326,10 @@ def crop(images):
     bottom_right = images[:, :, H_half:, W_half:]
 
     cropped = torch.cat([top_left, top_right, bottom_left, bottom_right], dim=0)
-
     return cropped
         
 class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
-    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False, patch=False):
+    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False, patch_grid_dim = 2):
         self.path = os.path.join(path, "train" if train else "test")
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         BaseSlidingWindowDataset.__init__(
@@ -310,7 +344,7 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
             categories=list(self.behavior_idx_map.keys()), 
             is_image_dataset=is_image_dataset,
             shuffle=shuffle,
-            patch = patch
+            patch_grid_dim=patch_grid_dim
         )
 
     def __iter__(self):
@@ -319,7 +353,8 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
             tar_batches = os.listdir(os.path.join(""+self.path, video))
             tar_batches.sort()
             tar_file_paths = [os.path.join(self.path, video, tar_batch) for tar_batch in tar_batches]
-            video_frames = wds.WebDataset(tar_file_paths).decode("pil").to_tuple("png", "json")
+            video_frames = wds.WebDataset(tar_file_paths, shardshuffle=False).decode("pil").to_tuple("png", "json")
+            # print(f"iterating over {video} with {len(tar_batches)} tar files")
             yield from self.scan(video_frames)
             yield from self.flush()
 
@@ -342,7 +377,7 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
             step_size=step_size,
             categories=self.categories,    
             is_image_dataset=is_image_dataset, 
-            shuffle=shuffle       
+            shuffle=shuffle
         )
 
     def __iter__(self):
@@ -366,7 +401,7 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
                 container = av.open(track_path)
                 label = np.loadtxt(label_path, delimiter='\t', dtype=int)
                 assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
-                print(f"iterating over {track_path} with {label.shape[0]} frames")
+                # print(f"iterating over {track_path} with {label.shape[0]} frames")
                 def annotated_frame_iterator():
                     for i, frame in enumerate(container.decode(video=0)):
                         yield frame.to_image(), label[i]
@@ -438,7 +473,7 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             step_size = 1, 
             is_image_dataset=True, 
             shuffle = shuffle, 
-            patch=patch
+            patch_grid_dim=2
         )
     elif dataset_name == 'HeinFishBehaviorSlidingWindow':
         # dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type, train=train)
@@ -453,7 +488,7 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             step_size = 1, 
             is_image_dataset=False, 
             shuffle = shuffle,
-            patch = patch
+            patch_grid_dim=2
         )
     elif dataset_name == 'AbbyFrames':
         dataset = AbbyDataset(
