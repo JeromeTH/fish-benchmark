@@ -22,6 +22,7 @@ def get_args():
     parser.add_argument("--lr", default=.00005)
     parser.add_argument("--batch_size", default=32)
     parser.add_argument("--shuffle", default=True)
+    parser.add_argument("--patch", default = False)
 
     return parser.parse_args()
 
@@ -35,6 +36,7 @@ if __name__ == '__main__':
     LEARNING_RATE = args.lr
     BATCH_SIZE = args.batch_size
     SHUFFLE = args.shuffle
+    PATCH = args.patch
 
     dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
     model_config = yaml.safe_load(open('config/models.yml', 'r'))
@@ -66,14 +68,16 @@ if __name__ == '__main__':
                                     train=True, 
                                     label_type=LABEL_TYPE, 
                                     model_name=PRETRAINED_MODEL, 
-                                    shuffle=SHUFFLE)
+                                    shuffle=SHUFFLE
+                                    patch = PATCH)
         test_dataset = get_dataset(DATASET, 
                                    dataset_config[DATASET]['path'], 
                                    augs = get_input_transform(PRETRAINED_MODEL) if not dataset_config[DATASET]['preprocessed'] else None, 
                                    train=False, 
                                    label_type=LABEL_TYPE, 
                                    model_name=PRETRAINED_MODEL, 
-                                   shuffle=SHUFFLE)
+                                   shuffle=SHUFFLE
+                                   patch = PATCH)
     
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=7)

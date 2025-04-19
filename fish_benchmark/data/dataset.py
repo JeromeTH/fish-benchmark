@@ -167,6 +167,8 @@ def get_sample_indices(lst_len, clip_len, sample_method = "even-spaced"):
         raise ValueError(f"sample_method {sample_method} not recognized.")
     return indices
 
+
+
 class BaseSlidingWindowDataset():
     def __init__(self, 
                  input_transform: callable=None, 
@@ -178,7 +180,8 @@ class BaseSlidingWindowDataset():
                  step_size = 1, 
                  categories: list = None, 
                  is_image_dataset = False, 
-                 shuffle = False):
+                 shuffle = False,
+                 patch = False):
         self.input_transform = input_transform
         self.annotation_to_label = annotation_to_label
         self.label_type = label_type
@@ -193,6 +196,7 @@ class BaseSlidingWindowDataset():
         self.is_image_dataset = is_image_dataset
         if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
         self.shuffle = shuffle
+        self.patch = patch
 
 
     def create_video_dataset(self, annotated_video_frames):
@@ -247,7 +251,7 @@ class BaseSlidingWindowDataset():
         return TensorDataset(clips, labels)
         
 class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
-    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False):
+    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False, patch=False):
         self.path = os.path.join(path, "train" if train else "test")
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         BaseSlidingWindowDataset.__init__(
@@ -261,7 +265,8 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
             step_size=step_size,
             categories=list(self.behavior_idx_map.keys()), 
             is_image_dataset=is_image_dataset,
-            shuffle=shuffle  
+            shuffle=shuffle,
+            patch = patch
         )
 
     def __iter__(self):
@@ -407,6 +412,7 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             step_size = 1, 
             is_image_dataset=False, 
             shuffle = shuffle
+            patch = patch
         )
     elif dataset_name == 'AbbyFrames':
         dataset = AbbyDataset(
