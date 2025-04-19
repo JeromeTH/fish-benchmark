@@ -232,6 +232,9 @@ class BaseSlidingWindowDataset():
 
             if self.is_image_dataset: clip = clip.squeeze()
 
+            if self.patch:
+                clip = crop(clip)
+
             unioned_labels = torch.any(relevant_labels.bool(), dim=0).float()
             clips.append(clip)
             labels.append(unioned_labels)
@@ -249,6 +252,29 @@ class BaseSlidingWindowDataset():
             labels = labels[perm]
 
         return TensorDataset(clips, labels)
+
+def crop(images):
+    """
+    Takes a batch of images and returns 4 crops per image.
+    
+    Args:
+        images (Tensor): shape [N, C, H, W]
+    
+    Returns:
+        Tensor: shape [4*N, C, H//2, W//2]
+    """
+    N, C, H, W = images.shape
+    H_half, W_half = H // 2, W // 2
+
+ 
+    top_left = images[:, :, :H_half, :W_half]
+    top_right = images[:, :, :H_half, W_half:]
+    bottom_left = images[:, :, H_half:, :W_half]
+    bottom_right = images[:, :, H_half:, W_half:]
+
+    cropped = torch.cat([top_left, top_right, bottom_left, bottom_right], dim=0)
+
+    return cropped
         
 class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
     def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False, patch=False):
@@ -272,7 +298,7 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
     def __iter__(self):
         video_names = os.listdir(self.path)
         for video in video_names:
-            tar_batches = os.listdir(os.path.join(".."+self.path, video))
+            tar_batches = os.listdir(os.path.join(""+self.path, video))
             tar_batches.sort()
             tar_file_paths = [os.path.join(self.path, video, tar_batch) for tar_batch in tar_batches]
             video_frames = wds.WebDataset(tar_file_paths).decode("pil").to_tuple("png", "json")
