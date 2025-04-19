@@ -68,7 +68,7 @@ if __name__ == '__main__':
                                     train=True, 
                                     label_type=LABEL_TYPE, 
                                     model_name=PRETRAINED_MODEL, 
-                                    shuffle=SHUFFLE
+                                    shuffle=SHUFFLE,
                                     patch = PATCH)
         test_dataset = get_dataset(DATASET, 
                                    dataset_config[DATASET]['path'], 
@@ -76,7 +76,7 @@ if __name__ == '__main__':
                                    train=False, 
                                    label_type=LABEL_TYPE, 
                                    model_name=PRETRAINED_MODEL, 
-                                   shuffle=SHUFFLE
+                                   shuffle=SHUFFLE,
                                    patch = PATCH)
     
         print("Data loaded.")

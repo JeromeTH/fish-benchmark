@@ -380,7 +380,7 @@ class PrecomputedDataset(IterableDataset):
                 frame = self.transform(frame)
             yield frame, label
 
-def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, shuffle = False):
+def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, shuffle = False, patch = False):
     if dataset_name == 'UCF101':
         dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'Caltech101':
@@ -411,7 +411,7 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             samples_per_window = 16,
             step_size = 1, 
             is_image_dataset=False, 
-            shuffle = shuffle
+            shuffle = shuffle,
             patch = patch
         )
     elif dataset_name == 'AbbyFrames':
