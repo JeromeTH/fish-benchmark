@@ -246,7 +246,7 @@ class BaseSlidingWindowDataset():
 
         return TensorDataset(clips, labels)
         
-class MaxDataset(IterableDataset, BaseSlidingWindowDataset):
+class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
     def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False):
         self.path = os.path.join(path, "train" if train else "test")
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
@@ -382,7 +382,7 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
         dataset = CalTech101WithSplit(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'HeinFishBehavior':
         # dataset = HeinFishBehavior(path, transform=augs, label_type=label_type, train=train)
-        dataset = MaxDataset(
+        dataset = MikeDataset(
             path,
             train=train, 
             transform=augs,
@@ -396,7 +396,7 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
         )
     elif dataset_name == 'HeinFishBehaviorSlidingWindow':
         # dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type, train=train)
-        dataset = MaxDataset(
+        dataset = MikeDataset(
             path, 
             train=train,
             transform=augs,
