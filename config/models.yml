@@ -8,3 +8,5 @@ swinv2:
   type: image
 timesformer: 
   type: video
+multipatch_dino:
+  type: video

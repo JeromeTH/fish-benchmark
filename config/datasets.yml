@@ -1,10 +1,30 @@
-HeinFishBehavior:
+MikeFrames:
   path: /share/j_sun/jth264/bites_frame_annotation_splitted
   precomputed_path: /share/j_sun/jth264/bites_frame_annotation_precomputed
   label_types: [onehot]
   type: image
   preprocessed: false
-  training_project: "HeinFishBehavior"
+  training_project: "MikeFrames"
+
+MikeFramesPatched: 
+  path: /share/j_sun/jth264/bites_frame_annotation_splitted
+  precomputed_path: /share/j_sun/jth264/mike_frames_patched_precomputed
+  label_types: [onehot]
+  type: video
+  training_project: "MikeFramesPatched"
+  preprocessed: false
+  num_frames: 4
+
+
+MikeSlidingWindow: 
+  path: /share/j_sun/jth264/bites_frame_annotation_splitted
+  precomputed_path: /share/j_sun/jth264/bites_frame_annotation_clips_precomputed
+  label_types: [onehot]
+  type: video
+  num_frames: 16
+  preprocessed: false
+  training_project: "MikeSlidingWindow"
+
 
 AbbyFrames:
   path: /share/j_sun/jth264/abby
@@ -31,16 +51,6 @@ AbbySlidingWindowPrecomputed:
   preprocessed: true
   training_project: "AbbySlidingWindow"
 
-
-HeinFishBehaviorSlidingWindow: 
-  path: /share/j_sun/jth264/bites_frame_annotation_splitted
-  precomputed_path: /share/j_sun/jth264/bites_frame_annotation_clips_precomputed
-  label_types: [onehot]
-  type: video
-  num_frames: 16
-  preprocessed: false
-  training_project: "HeinFishBehaviorSlidingWindow"
-
 UCF101:
   path: /share/j_sun/jth264/UCF101_subset
   precomputed_path: /share/j_sun/jth264/UCF101_precomputed
@@ -58,17 +68,17 @@ Caltech101:
   preprocessed: false
   training_project: "Caltech101"
 
-HeinFishBehaviorPrecomputed: 
+MikeFramesPrecomputed: 
   path: /share/j_sun/jth264/bites_frame_annotation_precomputed
   label_types: [onehot]
   type: image
   preprocessed: true
-  training_project: "HeinFishBehavior"
+  training_project: "MikeFrames"
 
-HeinFishBehaviorSlidingWindowPrecomputed:
+MikeSlidingWindowPrecomputed:
   path: /share/j_sun/jth264/bites_frame_annotation_clips_precomputed
   label_types: [onehot]
   type: video
   num_frames: 16
   preprocessed: true
-  training_project: "HeinFishBehaviorSlidingWindow"
+  training_project: "MikeSlidingWindow"

@@ -305,28 +305,6 @@ class BaseSlidingWindowDataset():
             #     print(f"Processed {i} frames")
             yield from self.handle_item(image, annotation)
 
-
-def crop(images):
-    """
-    Takes a batch of images and returns 4 crops per image.
-    
-    Args:
-        images (Tensor): shape [N, C, H, W]
-    
-    Returns:
-        Tensor: shape [4*N, C, H//2, W//2]
-    """
-    N, C, H, W = images.shape
-    H_half, W_half = H // 2, W // 2
-
- 
-    top_left = images[:, :, :H_half, :W_half]
-    top_right = images[:, :, :H_half, W_half:]
-    bottom_left = images[:, :, H_half:, :W_half]
-    bottom_right = images[:, :, H_half:, W_half:]
-
-    cropped = torch.cat([top_left, top_right, bottom_left, bottom_right], dim=0)
-    return cropped
         
 class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
     def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False, patch_grid_dim = 2):
@@ -455,13 +433,13 @@ class PrecomputedDataset(IterableDataset):
                 frame = self.transform(frame)
             yield frame, label
 
-def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, shuffle = False, patch = False):
+def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, shuffle = False):
     if dataset_name == 'UCF101':
         dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
     elif dataset_name == 'Caltech101':
         dataset = CalTech101WithSplit(path, train=train, transform=augs, label_type=label_type)
-    elif dataset_name == 'HeinFishBehavior':
-        # dataset = HeinFishBehavior(path, transform=augs, label_type=label_type, train=train)
+    elif dataset_name == 'MikeFrames':
+        # dataset = Mike(path, transform=augs, label_type=label_type, train=train)
         dataset = MikeDataset(
             path,
             train=train, 
@@ -473,10 +451,25 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             step_size = 1, 
             is_image_dataset=True, 
             shuffle = shuffle, 
+            patch_grid_dim=1
+        )
+    elif dataset_name == 'MikeFramesPatched':
+        # dataset = Mike(path, transform=augs, label_type=label_type, train=train)
+        dataset = MikeDataset(
+            path,
+            train=train, 
+            transform=augs,
+            label_type=label_type,
+            window_size = 1, 
+            tolerance_region = 0,
+            samples_per_window = 1,
+            step_size = 1, 
+            is_image_dataset=False, 
+            shuffle = shuffle, 
             patch_grid_dim=2
         )
-    elif dataset_name == 'HeinFishBehaviorSlidingWindow':
-        # dataset = HeinFishBehaviorSlidingWindow(path, transform=augs, label_type=label_type, train=train)
+    elif dataset_name == 'MikeSlidingWindow':
+        # dataset = MikeSlidingWindow(path, transform=augs, label_type=label_type, train=train)
         dataset = MikeDataset(
             path, 
             train=train,
@@ -516,11 +509,11 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             is_image_dataset=False, 
             shuffle = shuffle
         )
-    elif dataset_name == 'HeinFishBehaviorPrecomputed': 
+    elif dataset_name == 'MikePrecomputed': 
         behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         categories = list(behavior_idx_map.keys())
         dataset = PrecomputedDataset(path, model_name=model_name, categories=categories, transform=augs, train=train)
-    elif dataset_name == 'HeinFishBehaviorSlidingWindowPrecomputed':
+    elif dataset_name == 'MikeSlidingWindowPrecomputed':
         behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         categories = list(behavior_idx_map.keys())
         dataset = PrecomputedDataset(path, model_name=model_name, categories=categories, transform=augs, train=train)
