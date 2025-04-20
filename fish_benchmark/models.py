@@ -41,6 +41,33 @@ class AttentionBlock(nn.Module):
         output = self.head(attn_output).squeeze(-1)
         return output
 
+class MultipatchDino(nn.Module):
+    '''
+    applies dino model to each patch of the seqence of patches. Behaves like a video model. 
+    '''
+    def __init__(self):
+        super().__init__()
+        self.model = AutoModel.from_pretrained('facebook/dinov2-base')
+        self.config = self.model.config
+
+    def forward(self, x):
+        b, np, c, h, w = x.shape
+        x = x.view(b * np, c, h, w)
+        x = self.model(x).last_hidden_state
+        seq_len, dim = x.shape[1], x.shape[2]
+        x = x.view(b, np * seq_len, dim)
+        return x
+
+class BaseModel(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+        self.config = model.config
+
+    def forward(self, x):
+        x = self.model(x).last_hidden_state
+        return x
+
 def get_classifier(input_dim, output_dim, type):
     if type == 'mlp':
         return MLPWithPooling(input_dim, output_dim)
@@ -53,15 +80,17 @@ def get_classifier(input_dim, output_dim, type):
     
 def get_pretrained_model(model_name):
     if model_name == 'clip':
-        return CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
+        return BaseModel(CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32"))
     elif model_name == 'dino':
-        return AutoModel.from_pretrained('facebook/dinov2-base')
+        return BaseModel(AutoModel.from_pretrained('facebook/dinov2-base'))
     elif model_name == 'videomae':
-        return VideoMAEModel.from_pretrained("MCG-NJU/videomae-base")
+        return BaseModel(VideoMAEModel.from_pretrained("MCG-NJU/videomae-base"))
     elif model_name == 'timesformer':
-        return TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400")
+        return BaseModel(TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400"))
     elif model_name == 'swinv2':
-        return Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
+        return BaseModel(Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256"))
+    elif model_name == 'multipatch_dino':
+        return MultipatchDino()
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
@@ -71,6 +100,10 @@ def get_input_transform(model_name, do_resize = None):
         transform = lambda img: processor(images=img, return_tensors="pt").pixel_values.squeeze(0)
         return transform
     elif model_name == 'dino':
+        processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
+        transform = lambda img: processor(img, return_tensors="pt").pixel_values.squeeze(0)
+        return transform
+    elif model_name == 'multipatch_dino':
         processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
         transform = lambda img: processor(img, return_tensors="pt").pixel_values.squeeze(0)
         return transform
@@ -101,7 +134,7 @@ class MediaClassifier(nn.Module):
                 param.requires_grad = False
 
     def forward(self, x):
-        last_hidden_state = self.model(x).last_hidden_state
+        last_hidden_state = self.model(x)
         x = self.classifier(last_hidden_state)
         return x
 

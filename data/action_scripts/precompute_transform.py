@@ -13,7 +13,7 @@ import io
 dataset_config = yaml.safe_load(open('./config/datasets.yml', 'r'))
 model_config = yaml.safe_load(open('./config/models.yml', 'r'))
 SPECIFIC_DATASET_MODEL_PAIRS = [
-    ('AbbySlidingWindow', 'videomae')
+    ('HeinFishBehaviorSlidingWindow', 'videomae')
 ]
 
 def mkdir(path):
