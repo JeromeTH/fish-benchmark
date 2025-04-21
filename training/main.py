@@ -11,6 +11,7 @@ import wandb
 import yaml
 import argparse
 from lightning.pytorch.callbacks import ModelCheckpoint
+import sys
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -95,12 +96,16 @@ if __name__ == '__main__':
         )
 
         lit_module = get_lit_module(model, learning_rate=run.config['learning_rate'], label_type=LABEL_TYPE)
+        tqdm_disable = not sys.stdout.isatty()
+        print(f"Are we in an interactive terminal? {not tqdm_disable}")
         trainer = L.Trainer(max_epochs=run.config['epochs'], 
                             logger=wandb_logger, 
                             log_every_n_steps= 10, 
                             callbacks=[checkpoint_callback], 
                             val_check_interval=100, 
-                            limit_val_batches=1 )
+                            limit_val_batches=1, 
+                            enable_progress_bar=tqdm_disable
+                            )
         
         trainer.fit(lit_module, train_dataloader, val_dataloaders=test_dataloader)
 
