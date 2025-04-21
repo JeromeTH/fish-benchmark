@@ -1,6 +1,6 @@
 label_density:
-- 0.800000011920929
-- 0.019999999552965164
+- 0.7900000214576721
+- 0.009999999776482582
 metadata:
   MAX_BUFFER_SIZE: 62
   annotation_to_label: !!python/name:fish_benchmark.data.dataset.%3Clambda%3E ''
