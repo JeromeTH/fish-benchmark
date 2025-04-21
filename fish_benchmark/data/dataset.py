@@ -17,6 +17,7 @@ from torchvision import transforms
 import yaml
 from fish_benchmark.debug import serialized_size
 from typing import Iterator, Callable, Optional
+from dataclasses import dataclass
 
 class BaseCategoricalDataset(Dataset):
     @property
@@ -168,43 +169,33 @@ def get_sample_indices(lst_len, clip_len, sample_method = "even-spaced"):
         raise ValueError(f"sample_method {sample_method} not recognized.")
     return indices
 
-class BaseSlidingWindowDataset():
+@dataclass
+class BaseSlidingWindowDataset:
     '''
     Base Class for sliding through a video and getting a window of frames. Defines sampling, patching, and shuffling.
     The returned dataset would have items of size [samples_per_window * patch_per_sample, channels, height, width]
     The total number of items is (num_frames - window_size) // step_size
     The labels are one-hot encoded.
     '''
-    def __init__(self, 
-                 input_transform: callable=None, 
-                 annotation_to_label: callable=None,
-                 label_type: str= "onehot", 
-                 window_size: int=16, 
-                 tolerance_region: int = 16, 
-                 samples_per_window: int= 16, 
-                 step_size = 1, 
-                 categories: list = None, 
-                 is_image_dataset = False, 
-                 shuffle = False,
-                 patch_grid_dim = 1):
-        self.input_transform = input_transform
-        self.annotation_to_label = annotation_to_label
-        self.label_type = label_type
-        self.window_size = window_size
-        assert window_size % samples_per_window == 0, f"window_size {window_size} should be a factor of samples_per_window {samples_per_window}"
-        assert tolerance_region <= (window_size - 1)//2, f"tolerance_region {tolerance_region} should be less than or equal to window_size {window_size//2}"
-        assert label_type == "onehot", 'currently only onehot is supported'
-        self.tolerance_region = tolerance_region
-        self.step_size = step_size
-        self.categories = categories
-        self.samples_per_window = samples_per_window
-        self.is_image_dataset = is_image_dataset
+    input_transform: callable=None, 
+    annotation_to_label: callable=None,
+    label_type: str= "onehot", 
+    window_size: int=16, 
+    tolerance_region: int = 16, 
+    samples_per_window: int= 16, 
+    step_size: int = 1, 
+    categories: list = None, 
+    is_image_dataset: bool = False, 
+    shuffle: bool = False,
+    patch_grid_dim: int = 1, 
+    MAX_BUFFER_SIZE: int = 100
+    def __post_init__(self):
+        assert self.window_size % self.samples_per_window == 0, f"window_size {self.window_size} should be a factor of samples_per_window {samples_per_window}"
+        assert self.tolerance_region <= (self.window_size - 1)//2, f"tolerance_region {self.tolerance_region} should be less than or equal to window_size {window_size//2}"
+        assert self.label_type == "onehot", 'currently only onehot is supported'
+        assert isinstance(self.patch_grid_dim, int), \
+            f"patch_grid_dim should be an int, got {type(self.patch_grid_dim)}"
         if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
-        self.shuffle = shuffle
-        self.patch_grid_dim = patch_grid_dim
-        self.MAX_BUFFER_SIZE = 100 # max amount of 224*224 frames to keep in memory for before being shuffled, keeping it small first
-
-
         self.image_arrays_buffer = []
         self.annotations_buffer = []
         self.clips = []
@@ -310,6 +301,7 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
     def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False, patch_grid_dim = 2):
         self.path = os.path.join(path, "train" if train else "test")
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
+        self.SHARD_SIZE = 1000
         BaseSlidingWindowDataset.__init__(
             self,
             input_transform=transform,
@@ -322,20 +314,30 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
             categories=list(self.behavior_idx_map.keys()), 
             is_image_dataset=is_image_dataset,
             shuffle=shuffle,
-            patch_grid_dim=patch_grid_dim
+            patch_grid_dim=patch_grid_dim, 
+            MAX_BUFFER_SIZE = 100//window_size
         )
 
-    def __iter__(self):
+    def video_frames_shard_count_pairs(self):
         video_names = os.listdir(self.path)
         for video in video_names:
             tar_batches = os.listdir(os.path.join(""+self.path, video))
             tar_batches.sort()
             tar_file_paths = [os.path.join(self.path, video, tar_batch) for tar_batch in tar_batches]
             video_frames = wds.WebDataset(tar_file_paths, shardshuffle=False).decode("pil").to_tuple("png", "json")
+            yield video_frames, len(tar_batches)
+
+    def __len__(self):
+        count = 0
+        for _, shard_count in self.video_frames_shard_count_pairs():
+            count += shard_count * self.SHARD_SIZE
+        return count
+
+    def __iter__(self):
+        for video_frames, _ in self.video_frames_shard_count_pairs():
             # print(f"iterating over {video} with {len(tar_batches)} tar files")
             yield from self.scan(video_frames)
             yield from self.flush()
-
 
 class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
     def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False):
@@ -355,37 +357,44 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
             step_size=step_size,
             categories=self.categories,    
             is_image_dataset=is_image_dataset, 
-            shuffle=shuffle
+            shuffle=shuffle, 
+            patch_grid_dim=1,
+            MAX_BUFFER_SIZE = 1000//window_size #can have more b/c resolution is lower
         )
 
-    def __iter__(self):
+    def container_label_pairs(self):
         for annotation_path in os.listdir(self.path):
-            # print(annotation_path)
-            # print(get_files_of_type(os.path.join(self.path, annotation_path), ".mp4"))
             track_paths = sorted(get_files_of_type(os.path.join(self.path, annotation_path), ".mp4"))
             label_paths = sorted(get_files_of_type(os.path.join(self.path, annotation_path), ".txt"))
             label_dict = {
                 os.path.splitext(os.path.basename(p))[0]: p
                 for p in label_paths
             }
-            # print(track_paths)
             for track_path in track_paths:
                 track_name = os.path.splitext(os.path.basename(track_path))[0]
                 label_path = label_dict.get(track_name)
                 if label_path is None:
-                    # print(f"Warning: No label file found for {track_path}. Skipping.")
                     continue
                 
                 container = av.open(track_path)
                 label = np.loadtxt(label_path, delimiter='\t', dtype=int)
                 assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
-                # print(f"iterating over {track_path} with {label.shape[0]} frames")
-                def annotated_frame_iterator():
-                    for i, frame in enumerate(container.decode(video=0)):
-                        yield frame.to_image(), label[i]
+                yield container, label
 
-                yield from self.scan(annotated_frame_iterator())
-                yield from self.flush()
+    def __len__(self):
+        total_frames = 0
+        for container, label in self.container_label_pairs():
+            total_frames += container.streams.video[0].frames
+        return total_frames
+
+    def __iter__(self):
+        for container, label in self.container_label_pairs():
+            def annotated_frame_iterator():
+                for i, frame in enumerate(container.decode(video=0)):
+                    yield frame.to_image(), label[i]
+
+            yield from self.scan(annotated_frame_iterator())
+            yield from self.flush()
 
 
 class PrecomputedDataset(IterableDataset):

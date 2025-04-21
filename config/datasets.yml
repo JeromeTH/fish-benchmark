@@ -5,6 +5,7 @@ MikeFrames:
   type: image
   preprocessed: false
   training_project: "MikeFrames"
+  ours: true
 
 MikeFramesPatched: 
   path: /share/j_sun/jth264/bites_frame_annotation_splitted
@@ -14,7 +15,7 @@ MikeFramesPatched:
   training_project: "MikeFramesPatched"
   preprocessed: false
   num_frames: 4
-
+  ours: true
 
 MikeSlidingWindow: 
   path: /share/j_sun/jth264/bites_frame_annotation_splitted
@@ -24,6 +25,7 @@ MikeSlidingWindow:
   num_frames: 16
   preprocessed: false
   training_project: "MikeSlidingWindow"
+  ours: true
 
 
 AbbyFrames:
@@ -33,6 +35,7 @@ AbbyFrames:
   type: image
   preprocessed: false
   training_project: "AbbyFrames"
+  ours: true
 
 AbbySlidingWindow:
   path: /share/j_sun/jth264/abby
@@ -42,6 +45,7 @@ AbbySlidingWindow:
   num_frames: 16
   preprocessed: false
   training_project: "AbbySlidingWindow"
+  ours: true
 
 AbbySlidingWindowPrecomputed:
   path: /share/j_sun/jth264/abby_precomputed
@@ -50,6 +54,7 @@ AbbySlidingWindowPrecomputed:
   num_frames: 16
   preprocessed: true
   training_project: "AbbySlidingWindow"
+  ours: true
 
 UCF101:
   path: /share/j_sun/jth264/UCF101_subset
@@ -59,6 +64,7 @@ UCF101:
   num_frames: 16
   preprocessed: false
   training_project: "UCF101"
+  ours: false
   
 Caltech101: 
   path: /share/j_sun/jth264/Caltech101
@@ -67,6 +73,7 @@ Caltech101:
   type: image
   preprocessed: false
   training_project: "Caltech101"
+  ours: false
 
 MikeFramesPrecomputed: 
   path: /share/j_sun/jth264/bites_frame_annotation_precomputed
@@ -74,6 +81,7 @@ MikeFramesPrecomputed:
   type: image
   preprocessed: true
   training_project: "MikeFrames"
+  ours: true
 
 MikeSlidingWindowPrecomputed:
   path: /share/j_sun/jth264/bites_frame_annotation_clips_precomputed
@@ -82,3 +90,4 @@ MikeSlidingWindowPrecomputed:
   num_frames: 16
   preprocessed: true
   training_project: "MikeSlidingWindow"
+  ours: true

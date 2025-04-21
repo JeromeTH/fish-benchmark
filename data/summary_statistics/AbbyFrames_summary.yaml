@@ -1,0 +1,18 @@
+label_density:
+- 0.8100000023841858
+- 0.0
+metadata:
+  MAX_BUFFER_SIZE: 1000
+  annotation_to_label: !!python/name:fish_benchmark.data.dataset.%3Clambda%3E ''
+  categories:
+  - mouth not visible
+  - feeding
+  input_transform: null
+  is_image_dataset: true
+  label_type: onehot
+  patch_grid_dim: 1
+  samples_per_window: 1
+  shuffle: true
+  step_size: 1
+  tolerance_region: 0
+  window_size: 1

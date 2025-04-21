@@ -100,7 +100,7 @@ if __name__ == '__main__':
                             log_every_n_steps= 10, 
                             callbacks=[checkpoint_callback], 
                             val_check_interval=100, 
-                            limit_val_batches=1 )
+                            limit_val_batches=1)
         
         trainer.fit(lit_module, train_dataloader, val_dataloaders=test_dataloader)
 
