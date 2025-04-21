@@ -1,11 +1,11 @@
 import yaml
 from tqdm import tqdm
-from fish_benchmark.data.dataset import get_dataset
+from fish_benchmark.data.dataset import get_dataset, get_summary
 from dataclasses import asdict
 import torch
 from itertools import islice
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
-SPECIFIC_DATASETS = None # ['AbbyFrames']
+SPECIFIC_DATASETS = None # ['MikeFrames']
 if __name__ == '__main__':
     for dataset_name in dataset_config:
         if dataset_config[dataset_name]['preprocessed']:continue
@@ -18,14 +18,6 @@ if __name__ == '__main__':
                               train=True, 
                               label_type='onehot', 
                               shuffle=True)
-        summary = {}
-        summary['metadata'] = asdict(dataset)
-        labels = torch.stack([
-            label for _, label in islice(dataset, 100)
-        ])
-        label_density = labels.sum(dim=0) / labels.shape[0]
-        summary['label_density'] = label_density.tolist()
-
-        #store summary
+        summary = get_summary(dataset)
         with open(f'data/summary_statistics/{dataset_name}_summary.yaml', 'w') as f:
             yaml.dump(summary, f)

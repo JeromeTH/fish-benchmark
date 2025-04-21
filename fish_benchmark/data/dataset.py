@@ -17,7 +17,8 @@ from torchvision import transforms
 import yaml
 from fish_benchmark.debug import serialized_size
 from typing import Iterator, Callable, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+from itertools import islice
 
 class BaseCategoricalDataset(Dataset):
     @property
@@ -188,10 +189,12 @@ class BaseSlidingWindowDataset:
     is_image_dataset: bool = False, 
     shuffle: bool = False,
     patch_grid_dim: int = 1, 
+    temporal_sample_interval: int = 1,
     MAX_BUFFER_SIZE: int = 100
     def __post_init__(self):
-        assert self.window_size % self.samples_per_window == 0, f"window_size {self.window_size} should be a factor of samples_per_window {samples_per_window}"
-        assert self.tolerance_region <= (self.window_size - 1)//2, f"tolerance_region {self.tolerance_region} should be less than or equal to window_size {window_size//2}"
+        assert self.window_size % self.samples_per_window == 0, f"window_size {self.window_size} should be a factor of samples_per_window {self.samples_per_window}"
+        assert self.temporal_sample_interval > 0, f"temporal_sample_interval {self.temporal_sample_interval} should be greater than 0"
+        assert self.tolerance_region <= (self.window_size - 1)//2, f"tolerance_region {self.tolerance_region} should be less than or equal to window_size {self.window_size//2}"
         assert self.label_type == "onehot", 'currently only onehot is supported'
         assert isinstance(self.patch_grid_dim, int), \
             f"patch_grid_dim should be an int, got {type(self.patch_grid_dim)}"
@@ -273,9 +276,9 @@ class BaseSlidingWindowDataset:
         return patches
 
     def get_latest_clip(self):
-        gap = int(self.window_size/self.samples_per_window)
+        interval = int(self.window_size/self.samples_per_window)
         clip = np.stack([patch 
-                         for img in self.image_arrays_buffer[-self.window_size::gap] 
+                         for img in self.image_arrays_buffer[-self.window_size::interval] 
                          for patch in self.grid_patches(img)])
         if self.input_transform:
                 clip = self.input_transform(clip)
@@ -292,13 +295,33 @@ class BaseSlidingWindowDataset:
         '''
         self.clear_buffer()
         for i, (image, annotation) in enumerate(annotated_video_frames):
-            # if i % 100 == 0:
-            #     print(f"Processed {i} frames")
-            yield from self.handle_item(image, annotation)
+            if i % self.temporal_sample_interval == 0: 
+                yield from self.handle_item(image, annotation)
+
+    def downsampled_length(self, video_frames_count):
+        '''
+        Returns give this configuration of sliding window, how many items will be generated given one video with 
+        video_frames_count frames
+        '''
+        sampled_frames= video_frames_count // self.temporal_sample_interval
+        items_count = max(0, (sampled_frames - self.window_size) // self.step_size)
+        return items_count
 
         
 class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
-    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False, patch_grid_dim = 2):
+    def __init__(self, 
+                 path, 
+                 train = True, 
+                 transform=None, 
+                 label_type = "onehot", 
+                 window_size=16, 
+                 tolerance_region = 16, 
+                 samples_per_window = 16, 
+                 step_size = 1, 
+                 is_image_dataset = False, 
+                 shuffle = False, 
+                 patch_grid_dim = 2, 
+                 temporal_sample_interval = 2):
         self.path = os.path.join(path, "train" if train else "test")
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         self.SHARD_SIZE = 1000
@@ -315,6 +338,7 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
             is_image_dataset=is_image_dataset,
             shuffle=shuffle,
             patch_grid_dim=patch_grid_dim, 
+            temporal_sample_interval=temporal_sample_interval,
             MAX_BUFFER_SIZE = 100//window_size
         )
 
@@ -330,7 +354,8 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
     def __len__(self):
         count = 0
         for _, shard_count in self.video_frames_shard_count_pairs():
-            count += shard_count * self.SHARD_SIZE
+            video_frames_count = shard_count * self.SHARD_SIZE
+            count += self.downsampled_length(video_frames_count)
         return count
 
     def __iter__(self):
@@ -340,7 +365,19 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
             yield from self.flush()
 
 class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
-    def __init__(self, path, train = True, transform=None, label_type = "onehot", window_size=16, tolerance_region = 16, samples_per_window = 16, step_size = 1, is_image_dataset = False, shuffle = False):
+    def __init__(self, 
+                 path, 
+                 train = True, 
+                 transform=None, 
+                 label_type = "onehot", 
+                 window_size=16, 
+                 tolerance_region = 16, 
+                 samples_per_window = 16, 
+                 step_size = 1, 
+                 is_image_dataset = False, 
+                 shuffle = False, 
+                 patch_grid_dim = 1,
+                 temporal_sample_interval = 1):
         self.path = os.path.join(path, "train" if train else "test")
         cur_dir = os.path.dirname(os.path.abspath(__file__))
         full_path = os.path.join(cur_dir, 'abby_dset_categories.json')
@@ -358,7 +395,8 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
             categories=self.categories,    
             is_image_dataset=is_image_dataset, 
             shuffle=shuffle, 
-            patch_grid_dim=1,
+            patch_grid_dim=patch_grid_dim,
+            temporal_sample_interval=temporal_sample_interval,
             MAX_BUFFER_SIZE = 1000//window_size #can have more b/c resolution is lower
         )
 
@@ -384,7 +422,7 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
     def __len__(self):
         total_frames = 0
         for container, label in self.container_label_pairs():
-            total_frames += container.streams.video[0].frames
+            total_frames += self.downsampled_length(container.streams.video[0].frames) 
         return total_frames
 
     def __iter__(self):
@@ -442,6 +480,17 @@ class PrecomputedDataset(IterableDataset):
                 frame = self.transform(frame)
             yield frame, label
 
+def get_summary(dataset):
+    summary = {}
+    summary['metadata'] = asdict(dataset)
+    labels = torch.stack([
+        label for _, label in islice(dataset, 100)
+    ])
+    label_density = labels.sum(dim=0) / labels.shape[0]
+    summary['label_density'] = label_density.tolist()
+    summary['dataset_size'] = len(dataset)
+    return summary
+
 def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, shuffle = False):
     if dataset_name == 'UCF101':
         dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
@@ -457,10 +506,11 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             window_size = 1, 
             tolerance_region = 0,
             samples_per_window = 1,
-            step_size = 1, 
+            step_size = 10, 
             is_image_dataset=True, 
             shuffle = shuffle, 
-            patch_grid_dim=1
+            patch_grid_dim=1, 
+            temporal_sample_interval=1
         )
     elif dataset_name == 'MikeFramesPatched':
         # dataset = Mike(path, transform=augs, label_type=label_type, train=train)
@@ -472,10 +522,11 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             window_size = 1, 
             tolerance_region = 0,
             samples_per_window = 1,
-            step_size = 1, 
+            step_size = 10, 
             is_image_dataset=False, 
             shuffle = shuffle, 
-            patch_grid_dim=2
+            patch_grid_dim=2, 
+            temporal_sample_interval=1
         )
     elif dataset_name == 'MikeSlidingWindow':
         # dataset = MikeSlidingWindow(path, transform=augs, label_type=label_type, train=train)
@@ -490,7 +541,8 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             step_size = 1, 
             is_image_dataset=False, 
             shuffle = shuffle,
-            patch_grid_dim=2
+            patch_grid_dim=2, 
+            temporal_sample_interval=1
         )
     elif dataset_name == 'AbbyFrames':
         dataset = AbbyDataset(
@@ -503,7 +555,8 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             samples_per_window = 1,
             step_size=1, 
             is_image_dataset=True, 
-            shuffle = shuffle
+            shuffle = shuffle, 
+            temporal_sample_interval=2
         )
     elif dataset_name == 'AbbySlidingWindow':
         dataset = AbbyDataset(
@@ -516,7 +569,8 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             samples_per_window = 16,
             step_size=1, 
             is_image_dataset=False, 
-            shuffle = shuffle
+            shuffle = shuffle, 
+            temporal_sample_interval=2
         )
     elif dataset_name == 'MikePrecomputed': 
         behavior_idx_map = load_behavior_idx_map('behavior_categories.json')

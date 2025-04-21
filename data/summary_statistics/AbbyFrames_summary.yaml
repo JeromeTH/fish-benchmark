@@ -1,5 +1,6 @@
+dataset_size: 6731
 label_density:
-- 0.7300000190734863
+- 0.6299999952316284
 - 0.0
 metadata:
   MAX_BUFFER_SIZE: 1000
@@ -14,5 +15,6 @@ metadata:
   samples_per_window: 1
   shuffle: true
   step_size: 1
+  temporal_sample_interval: 2
   tolerance_region: 0
   window_size: 1

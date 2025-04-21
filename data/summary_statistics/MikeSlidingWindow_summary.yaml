@@ -1,3 +1,4 @@
+dataset_size: 1417976
 label_density:
 - 0.0
 - 0.0
@@ -50,5 +51,6 @@ metadata:
   samples_per_window: 16
   shuffle: true
   step_size: 1
+  temporal_sample_interval: 1
   tolerance_region: 7
   window_size: 16

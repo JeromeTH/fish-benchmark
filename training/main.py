@@ -4,7 +4,7 @@ In this file, we want to train the video MAE model for video classification with
 import torch
 import lightning as L
 from fish_benchmark.models import get_input_transform, MediaClassifier, MediaClassifier 
-from fish_benchmark.data.dataset import get_dataset
+from fish_benchmark.data.dataset import get_dataset, get_summary
 from fish_benchmark.litmodule import get_lit_module
 from pytorch_lightning.loggers import WandbLogger
 import wandb
@@ -25,6 +25,35 @@ def get_args():
     parser.add_argument("--shuffle", default=True)
 
     return parser.parse_args()
+
+def log_best_model(checkpoint_callback, run):
+    if checkpoint_callback.best_model_path:
+        artifact = wandb.Artifact(
+            name=f"model-{run.id}",
+            type="model",
+            metadata={
+                "tags": run.tags,
+                "config": dict(run.config),
+                "notes": run.notes
+            }
+        )
+        artifact.add_file(checkpoint_callback.best_model_path)
+        run.log_artifact(artifact)
+
+def log_dataset_summary(dataset, run):
+    #store summary
+    summary = get_summary(dataset)
+    artifact = wandb.Artifact(
+        name=f"dataset-{run.id}",
+        type="dataset",
+        metadata={
+            "tags": run.tags,
+            "config": dict(run.config),
+            "notes": run.notes
+        }
+    )
+    artifact.add_file(summary)
+    run.log_artifact(artifact)
 
 if __name__ == '__main__':
     args = get_args()
@@ -106,16 +135,5 @@ if __name__ == '__main__':
                             limit_val_batches=1)
         
         trainer.fit(lit_module, train_dataloader, val_dataloaders=test_dataloader)
-
-        if checkpoint_callback.best_model_path:
-            artifact = wandb.Artifact(
-                name=f"model-{run.id}",
-                type="model",
-                metadata={
-                    "tags": run.tags,
-                    "config": dict(run.config),
-                    "notes": run.notes
-                }
-            )
-            artifact.add_file(checkpoint_callback.best_model_path)
-            run.log_artifact(artifact)
+        log_best_model(checkpoint_callback, run)
+        log_dataset_summary(train_dataset, run)
