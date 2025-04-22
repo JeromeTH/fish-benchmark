@@ -21,6 +21,7 @@ from dataclasses import dataclass, asdict
 from itertools import islice
 from math import ceil
 from tqdm import tqdm
+from collections import deque
 
 class BaseCategoricalDataset(Dataset):
     @property
@@ -202,20 +203,14 @@ class BaseSlidingWindowDataset:
             f"patch_grid_dim should be an int, got {type(self.patch_grid_dim)}"
         assert self.MAX_BUFFER_SIZE > self.window_size, f"MAX_BUFFER_SIZE {self.MAX_BUFFER_SIZE} should be greater than window_size {self.window_size}, otherwise it will not be able to store enough frames"
         if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
-        self.image_window_queue = []
-        self.annotations_window_queue = []
+        self.image_window_queue = deque([], maxlen=self.window_size)
+        self.annotations_window_queue = deque([], maxlen=self.window_size)
         self.clips = []
         self.labels = []
 
     def clear_window_queue(self):
-        self.image_window_queue = []
-        self.annotations_window_queue = []
-
-    def clean_window_queue(self):
-        #retain only the last window_size elements
-        if len(self.image_window_queue) > self.window_size:
-            self.image_window_queue = self.image_window_queue[-self.window_size:]
-            self.annotations_window_queue = self.annotations_window_queue[-self.window_size:]
+        self.image_window_queue = deque([], maxlen=self.window_size)
+        self.annotations_window_queue = deque([], maxlen=self.window_size)
 
     def clear_buffer(self):
         self.clips = []
@@ -263,9 +258,6 @@ class BaseSlidingWindowDataset:
             self.clips.append(self.get_latest_clip())
             self.labels.append(self.get_latest_label())
 
-        if len(self.image_window_queue) > self.MAX_BUFFER_SIZE:
-            self.clean_window_queue()
-
         if len(self.clips) >= self.MAX_BUFFER_SIZE:
             yield from self.flush()
             
@@ -273,7 +265,7 @@ class BaseSlidingWindowDataset:
     def get_latest_label(self):
         last_idx = len(self.annotations_window_queue) - 1
         mid_idx = last_idx - int(self.window_size/2)
-        relevant_annotations = self.annotations_window_queue[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
+        relevant_annotations = list(self.annotations_window_queue)[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
         relevant_labels = torch.stack([self.annotation_to_label(annotation) for annotation in relevant_annotations]) 
         relevant_labels = relevant_labels[:, :len(self.categories)] #drop extra incomplete labels
         unioned_labels = torch.any(relevant_labels.bool(), dim=0).float()
@@ -308,7 +300,7 @@ class BaseSlidingWindowDataset:
     def get_latest_clip(self):
         interval = int(self.window_size/self.samples_per_window)
         clip = np.stack([patch 
-                         for img in self.image_window_queue[-self.window_size::interval] 
+                         for img in list(self.image_window_queue)[-self.window_size::interval] 
                          for patch in self.grid_patches(img)])
         if self.input_transform:
                 clip = self.input_transform(clip)
