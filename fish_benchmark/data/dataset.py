@@ -19,6 +19,8 @@ from fish_benchmark.debug import serialized_size
 from typing import Iterator, Callable, Optional
 from dataclasses import dataclass, asdict
 from itertools import islice
+from math import ceil
+from tqdm import tqdm
 
 class BaseCategoricalDataset(Dataset):
     @property
@@ -190,7 +192,7 @@ class BaseSlidingWindowDataset:
     shuffle: bool = False,
     patch_grid_dim: int = 1, 
     temporal_sample_interval: int = 1,
-    MAX_BUFFER_SIZE: int = 100
+    MAX_BUFFER_SIZE: int = 1000
     def __post_init__(self):
         assert self.window_size % self.samples_per_window == 0, f"window_size {self.window_size} should be a factor of samples_per_window {self.samples_per_window}"
         assert self.temporal_sample_interval > 0, f"temporal_sample_interval {self.temporal_sample_interval} should be greater than 0"
@@ -198,15 +200,24 @@ class BaseSlidingWindowDataset:
         assert self.label_type == "onehot", 'currently only onehot is supported'
         assert isinstance(self.patch_grid_dim, int), \
             f"patch_grid_dim should be an int, got {type(self.patch_grid_dim)}"
+        assert self.MAX_BUFFER_SIZE > self.window_size, f"MAX_BUFFER_SIZE {self.MAX_BUFFER_SIZE} should be greater than window_size {self.window_size}, otherwise it will not be able to store enough frames"
         if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
-        self.image_arrays_buffer = []
-        self.annotations_buffer = []
+        self.image_window_queue = []
+        self.annotations_window_queue = []
         self.clips = []
         self.labels = []
 
+    def clear_window_queue(self):
+        self.image_window_queue = []
+        self.annotations_window_queue = []
+
+    def clean_window_queue(self):
+        #retain only the last window_size elements
+        if len(self.image_window_queue) > self.window_size:
+            self.image_window_queue = self.image_window_queue[-self.window_size:]
+            self.annotations_window_queue = self.annotations_window_queue[-self.window_size:]
+
     def clear_buffer(self):
-        self.image_arrays_buffer = []
-        self.annotations_buffer = []
         self.clips = []
         self.labels = []
 
@@ -226,24 +237,43 @@ class BaseSlidingWindowDataset:
             yield image, label
         self.clear_buffer()
 
-    def handle_item(self, image, annotation):
+    def is_yielding_idx(self, idx):
+        if idx - (self.window_size - 1) < 0: return False
+        return (idx - (self.window_size - 1)) % self.step_size == 0
+    
+    def next_yielding_idx(self, idx):
+        nearest_kth_yield = ceil((idx - (self.window_size - 1)) / self.step_size) #0 indexed 
+        return nearest_kth_yield * self.step_size + (self.window_size - 1)
+
+    def handle_item(self, ith_sample, image, annotation):
         '''
         depending on the context of the current seen images, this may return a clip or None
         '''
-        self.image_arrays_buffer.append(np.array(image.convert('RGB')))
-        self.annotations_buffer.append(annotation)
-        if len(self.image_arrays_buffer) >= self.window_size:
+        
+        if self.next_yielding_idx(ith_sample) - ith_sample > (self.window_size - 1):
+            #if the next yielding index is more than window size away, then this frame would not be used
+            return
+        
+        self.image_window_queue.append(np.array(image.convert('RGB')))
+        self.annotations_window_queue.append(annotation)
+    
+        if self.is_yielding_idx(ith_sample):
+            #if the calculation of yielding index is correct, then we should have enough images in the window queue
+            assert len(self.image_window_queue) >= self.window_size, f"image buffer should be at least {self.window_size} long"
             self.clips.append(self.get_latest_clip())
             self.labels.append(self.get_latest_label())
+
+        if len(self.image_window_queue) > self.MAX_BUFFER_SIZE:
+            self.clean_window_queue()
 
         if len(self.clips) >= self.MAX_BUFFER_SIZE:
             yield from self.flush()
             
 
     def get_latest_label(self):
-        last_idx = len(self.annotations_buffer) - 1
+        last_idx = len(self.annotations_window_queue) - 1
         mid_idx = last_idx - int(self.window_size/2)
-        relevant_annotations = self.annotations_buffer[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
+        relevant_annotations = self.annotations_window_queue[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
         relevant_labels = torch.stack([self.annotation_to_label(annotation) for annotation in relevant_annotations]) 
         relevant_labels = relevant_labels[:, :len(self.categories)] #drop extra incomplete labels
         unioned_labels = torch.any(relevant_labels.bool(), dim=0).float()
@@ -278,7 +308,7 @@ class BaseSlidingWindowDataset:
     def get_latest_clip(self):
         interval = int(self.window_size/self.samples_per_window)
         clip = np.stack([patch 
-                         for img in self.image_arrays_buffer[-self.window_size::interval] 
+                         for img in self.image_window_queue[-self.window_size::interval] 
                          for patch in self.grid_patches(img)])
         if self.input_transform:
                 clip = self.input_transform(clip)
@@ -294,9 +324,11 @@ class BaseSlidingWindowDataset:
         annotation is whatever the dataset annotation. One needs to implement the annotation_to_label function to convert it to a label
         '''
         self.clear_buffer()
+        self.clear_window_queue()
         for i, (image, annotation) in enumerate(annotated_video_frames):
             if i % self.temporal_sample_interval == 0: 
-                yield from self.handle_item(image, annotation)
+                sample_idx = i // self.temporal_sample_interval
+                yield from self.handle_item(sample_idx, image, annotation)
 
     def downsampled_length(self, video_frames_count):
         '''
@@ -484,7 +516,7 @@ def get_summary(dataset):
     summary = {}
     summary['metadata'] = asdict(dataset)
     labels = torch.stack([
-        label for _, label in islice(dataset, 100)
+        label for _, label in tqdm(islice(dataset, 100))
     ])
     label_density = labels.sum(dim=0) / labels.shape[0]
     summary['label_density'] = label_density.tolist()
@@ -522,7 +554,7 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
             window_size = 1, 
             tolerance_region = 0,
             samples_per_window = 1,
-            step_size = 10, 
+            step_size = 1, 
             is_image_dataset=False, 
             shuffle = shuffle, 
             patch_grid_dim=2, 
