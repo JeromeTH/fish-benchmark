@@ -4,11 +4,11 @@ import io
 import torch
 
 @contextmanager
-def step_timer(name):
+def step_timer(name, verbose=True):
     start = time.time()
     yield
     end = time.time()
-    print(f"[{name}] took {end - start:.6f} seconds")
+    if verbose: print(f"[{name}] took {end - start:.6f} seconds")
 
 def print_info(tensor):
     print("type:", type(tensor))

@@ -22,6 +22,11 @@ from itertools import islice
 from math import ceil
 from tqdm import tqdm
 from collections import deque
+from fish_benchmark.debug import step_timer
+from PIL import Image
+from torchvision.transforms import ToTensor
+
+to_tensor = ToTensor()
 
 class BaseCategoricalDataset(Dataset):
     @property
@@ -249,14 +254,18 @@ class BaseSlidingWindowDataset:
             #if the next yielding index is more than window size away, then this frame would not be used
             return
         
-        self.image_window_queue.append(np.array(image.convert('RGB')))
-        self.annotations_window_queue.append(annotation)
+        with step_timer("converting PIL image to numpy", verbose=True): 
+            #images are converted to tensors from the start as we want to treat clip processing as batch processing using torch.stack
+            self.image_window_queue.append(np.array(image.convert('RGB')))
+            self.annotations_window_queue.append(annotation)
     
         if self.is_yielding_idx(ith_sample):
             #if the calculation of yielding index is correct, then we should have enough images in the window queue
             assert len(self.image_window_queue) >= self.window_size, f"image buffer should be at least {self.window_size} long"
-            self.clips.append(self.get_latest_clip())
-            self.labels.append(self.get_latest_label())
+
+            with step_timer("getting latest clip", verbose=True):
+                self.clips.append(self.get_latest_clip())
+                self.labels.append(self.get_latest_label())
 
         if len(self.clips) >= self.MAX_BUFFER_SIZE:
             yield from self.flush()
@@ -296,18 +305,29 @@ class BaseSlidingWindowDataset:
                 patches.append(patch)
 
         return patches
+    
+    def numpy_to_tensor(self, clip):
+        '''
+        np.ndarray clip has shape (samples_per_window * patch_per_sample, height, width, channels)
+        '''
+        clip = torch.from_numpy(clip).permute(0, 3, 1, 2)
+        clip = clip.float() / 255.0
+        return clip
 
     def get_latest_clip(self):
         interval = int(self.window_size/self.samples_per_window)
-        clip = np.stack([patch 
-                         for img in list(self.image_window_queue)[-self.window_size::interval] 
-                         for patch in self.grid_patches(img)])
-        if self.input_transform:
-                clip = self.input_transform(clip)
-        else: 
-            clip = torch.from_numpy(clip)
-        if self.is_image_dataset: clip = clip.squeeze()
-        return clip
+        with step_timer("stacking patches", verbose=True):
+            clip = np.stack([patch 
+                            for img in list(self.image_window_queue)[-self.window_size::interval] 
+                            for patch in self.grid_patches(img)])
+        with step_timer("converting to tensor", verbose=True):
+            tensor_clip = self.numpy_to_tensor(clip)
+        with step_timer("applying vision transform", verbose=True):
+            if self.input_transform:
+                tensor_clip = self.input_transform(tensor_clip)
+
+        if self.is_image_dataset: tensor_clip = tensor_clip.squeeze()
+        return tensor_clip
 
     def scan(self, annotated_video_frames: Iterator):
         '''
