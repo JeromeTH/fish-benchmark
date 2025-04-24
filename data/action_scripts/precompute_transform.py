@@ -40,8 +40,8 @@ if __name__ == "__main__":
                     frame_save_path = mkdir(os.path.join(save_path, 'frames'))
                     label_save_path = mkdir(os.path.join(save_path, 'labels'))
                     for id, (image, label) in tqdm(enumerate(dataset), desc=f"Precomputing {DSET} for {MODEL}"):
-                            torch.save(image.clone(), os.path.join(frame_save_path, f'{id}.pt'))
-                            torch.save(label.clone(), os.path.join(label_save_path, f'{id}.pt'))
+                        torch.save(image.clone(), os.path.join(frame_save_path, f'{id}.pt'))
+                        torch.save(label.clone(), os.path.join(label_save_path, f'{id}.pt'))
 
                 except Exception as e:
                     logger.exception(f"Error precomputing dataset {DSET} for model {MODEL}: {e}")

@@ -16,7 +16,7 @@ import time
 import threading
 import psutil
 from multiprocessing import Pool, cpu_count
-from fish_benchmark.utils import get_files_of_type, extract_video_identifier, extract_annotation_identifier, setup_logger
+from fish_benchmark.utils import get_files_of_type, extract_video_identifier, extract_annotation_identifier, setup_logger, frame_id_with_padding
 import re
 import logging
 
@@ -30,10 +30,6 @@ if not os.path.exists(OUTPUT_PATH):
     os.makedirs(OUTPUT_PATH)
 
 logger = setup_logger('frame_annotation', 'logs/output/frame_annotation.log')
-
-def frame_id_with_padding(id):
-    # Pad the frame ID with leading zeros to make it 6 digits
-    return str(id).zfill(8)
 
 def get_png_bytes(image: Image) -> bytes:
     img_buffer = io.BytesIO()

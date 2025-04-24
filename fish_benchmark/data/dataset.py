@@ -146,6 +146,12 @@ class CalTech101WithSplit(Dataset):
         else:
             raise ValueError(f"label_type {self.label_type} not recognized.")
 
+def load_from_cur_dir(path):
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(cur_dir, path)
+    with open(full_path, 'r') as f:
+        data = json.load(f)
+    return data
 
 def load_behavior_idx_map(path):
         '''
@@ -156,11 +162,7 @@ def load_behavior_idx_map(path):
             ...
         ]
         '''
-        cur_dir = os.path.dirname(os.path.abspath(__file__))
-        full_path = os.path.join(cur_dir, path)
-        with open(full_path, 'r') as f:
-            behaviors = json.load(f)
-
+        behaviors = load_from_cur_dir(path)
         behavior_idx_map = {behavior['name']: idx for idx, behavior in enumerate(behaviors)}
         return behavior_idx_map
 
@@ -416,7 +418,7 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
                  patch_grid_dim = 1,
                  temporal_sample_interval = 1):
         self.path = path
-        self.categories = json.load(open('fish_benchmark/data/abby_dset_categories.json', 'r'))
+        self.categories = load_from_cur_dir('abby_dset_categories.json')
         BaseSlidingWindowDataset.__init__(
             self,
             input_transform=transform,
