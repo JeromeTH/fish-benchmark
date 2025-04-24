@@ -3,7 +3,7 @@ import os
 import yaml
 import torch
 from fish_benchmark.data.dataset import get_dataset
-from fish_benchmark.utils import frame_id_with_padding
+from fish_benchmark.utils import frame_id_with_padding, setup_logger
 from tqdm import tqdm
 
 def get_args():
@@ -13,6 +13,10 @@ def get_args():
     parser.add_argument("--id", required=True)
     parser.add_argument("--dataset", required=True)
     return parser.parse_args()
+
+logger = setup_logger(
+    'precompute_sliding_window'
+)
 
 if __name__ == '__main__':
     args = get_args()
@@ -38,6 +42,7 @@ if __name__ == '__main__':
     )
     os.makedirs(os.path.join(DEST, 'inputs'), exist_ok=True)
     os.makedirs(os.path.join(DEST, 'labels'), exist_ok=True)
-    for i, (clip, label) in tqdm(enumerate(dataset)):
+    logger.info(f"Saving to {DEST}")
+    for i, (clip, label) in enumerate(dataset):
         torch.save(clip.clone(), os.path.join(DEST, 'inputs', f'{ID}_{frame_id_with_padding(i)}.pt'))
         torch.save(label.clone(), os.path.join(DEST, 'labels', f'{ID}_{frame_id_with_padding(i)}.pt'))
