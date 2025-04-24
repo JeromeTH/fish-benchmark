@@ -387,9 +387,7 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
         )
 
     def video_frames_shard_count_pairs(self):
-        print(self.path)
         tar_file_paths = get_files_of_type(self.path, ".tar")
-        print(tar_file_paths)
         video_frames = wds.WebDataset(tar_file_paths, shardshuffle=False).decode("pil").to_tuple("png", "json")
         return video_frames, len(tar_file_paths)
 
@@ -418,9 +416,7 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
                  patch_grid_dim = 1,
                  temporal_sample_interval = 1):
         self.path = path
-        cur_dir = os.path.dirname(os.path.abspath(__file__))
-        full_path = os.path.join(cur_dir, 'abby_dset_categories.json')
-        self.categories = json.load(open(full_path, 'r'))
+        self.categories = json.load(open('fish_benchmark/data/abby_dset_categories.json', 'r'))
         BaseSlidingWindowDataset.__init__(
             self,
             input_transform=transform,
@@ -440,23 +436,22 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
         )
 
     def container_label_pairs(self):
-        for annotation_path in os.listdir(self.path):
-            track_paths = sorted(get_files_of_type(os.path.join(self.path, annotation_path), ".mp4"))
-            label_paths = sorted(get_files_of_type(os.path.join(self.path, annotation_path), ".txt"))
-            label_dict = {
-                os.path.splitext(os.path.basename(p))[0]: p
-                for p in label_paths
-            }
-            for track_path in track_paths:
-                track_name = os.path.splitext(os.path.basename(track_path))[0]
-                label_path = label_dict.get(track_name)
-                if label_path is None:
-                    continue
-                
-                container = av.open(track_path)
-                label = np.loadtxt(label_path, delimiter='\t', dtype=int)
-                assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
-                yield container, label
+        track_paths = sorted(get_files_of_type(self.path, ".mp4"))
+        label_paths = sorted(get_files_of_type(self.path, ".txt"))
+        label_dict = {
+            os.path.splitext(os.path.basename(p))[0]: p
+            for p in label_paths
+        }
+        for track_path in track_paths:
+            track_name = os.path.splitext(os.path.basename(track_path))[0]
+            label_path = label_dict.get(track_name)
+            if label_path is None:
+                continue
+            
+            container = av.open(track_path)
+            label = np.loadtxt(label_path, delimiter='\t', dtype=int)
+            assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
+            yield container, label
 
     def __len__(self):
         total_frames = 0
