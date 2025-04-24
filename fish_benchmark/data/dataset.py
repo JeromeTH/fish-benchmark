@@ -27,6 +27,7 @@ from PIL import Image
 from torchvision.transforms import ToTensor
 
 to_tensor = ToTensor()
+PROFILE = False
 
 class BaseCategoricalDataset(Dataset):
     @property
@@ -254,7 +255,7 @@ class BaseSlidingWindowDataset:
             #if the next yielding index is more than window size away, then this frame would not be used
             return
         
-        with step_timer("converting PIL image to numpy", verbose=True): 
+        with step_timer("converting PIL image to numpy", verbose=PROFILE): 
             #images are converted to tensors from the start as we want to treat clip processing as batch processing using torch.stack
             self.image_window_queue.append(np.array(image.convert('RGB')))
             self.annotations_window_queue.append(annotation)
@@ -263,7 +264,7 @@ class BaseSlidingWindowDataset:
             #if the calculation of yielding index is correct, then we should have enough images in the window queue
             assert len(self.image_window_queue) >= self.window_size, f"image buffer should be at least {self.window_size} long"
 
-            with step_timer("getting latest clip", verbose=True):
+            with step_timer("getting latest clip", verbose=PROFILE):
                 self.clips.append(self.get_latest_clip())
                 self.labels.append(self.get_latest_label())
 
@@ -316,13 +317,13 @@ class BaseSlidingWindowDataset:
 
     def get_latest_clip(self):
         interval = int(self.window_size/self.samples_per_window)
-        with step_timer("stacking patches", verbose=True):
+        with step_timer("stacking patches", verbose=PROFILE):
             clip = np.stack([patch 
                             for img in list(self.image_window_queue)[-self.window_size::interval] 
                             for patch in self.grid_patches(img)])
-        with step_timer("converting to tensor", verbose=True):
+        with step_timer("converting to tensor", verbose=PROFILE):
             tensor_clip = self.numpy_to_tensor(clip)
-        with step_timer("applying vision transform", verbose=True):
+        with step_timer("applying vision transform", verbose=PROFILE):
             if self.input_transform:
                 tensor_clip = self.input_transform(tensor_clip)
 
@@ -355,7 +356,6 @@ class BaseSlidingWindowDataset:
 class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
     def __init__(self, 
                  path, 
-                 train = True, 
                  transform=None, 
                  label_type = "onehot", 
                  window_size=16, 
@@ -366,7 +366,7 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
                  shuffle = False, 
                  patch_grid_dim = 2, 
                  temporal_sample_interval = 2):
-        self.path = os.path.join(path, "train" if train else "test")
+        self.path = path
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         self.SHARD_SIZE = 1000
         BaseSlidingWindowDataset.__init__(
@@ -387,31 +387,26 @@ class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
         )
 
     def video_frames_shard_count_pairs(self):
-        video_names = os.listdir(self.path)
-        for video in video_names:
-            tar_batches = os.listdir(os.path.join(""+self.path, video))
-            tar_batches.sort()
-            tar_file_paths = [os.path.join(self.path, video, tar_batch) for tar_batch in tar_batches]
-            video_frames = wds.WebDataset(tar_file_paths, shardshuffle=False).decode("pil").to_tuple("png", "json")
-            yield video_frames, len(tar_batches)
+        print(self.path)
+        tar_file_paths = get_files_of_type(self.path, ".tar")
+        print(tar_file_paths)
+        video_frames = wds.WebDataset(tar_file_paths, shardshuffle=False).decode("pil").to_tuple("png", "json")
+        return video_frames, len(tar_file_paths)
 
     def __len__(self):
-        count = 0
-        for _, shard_count in self.video_frames_shard_count_pairs():
-            video_frames_count = shard_count * self.SHARD_SIZE
-            count += self.downsampled_length(video_frames_count)
+        _, shard_count = self.video_frames_shard_count_pairs()
+        video_frames_count = shard_count * self.SHARD_SIZE
+        count = self.downsampled_length(video_frames_count)
         return count
 
     def __iter__(self):
-        for video_frames, _ in self.video_frames_shard_count_pairs():
-            # print(f"iterating over {video} with {len(tar_batches)} tar files")
-            yield from self.scan(video_frames)
-            yield from self.flush()
+        video_frames, _ =  self.video_frames_shard_count_pairs()
+        yield from self.scan(video_frames)
+        yield from self.flush()
 
 class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
     def __init__(self, 
                  path, 
-                 train = True, 
                  transform=None, 
                  label_type = "onehot", 
                  window_size=16, 
@@ -422,7 +417,7 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
                  shuffle = False, 
                  patch_grid_dim = 1,
                  temporal_sample_interval = 1):
-        self.path = os.path.join(path, "train" if train else "test")
+        self.path = path
         cur_dir = os.path.dirname(os.path.abspath(__file__))
         full_path = os.path.join(cur_dir, 'abby_dset_categories.json')
         self.categories = json.load(open(full_path, 'r'))
@@ -480,23 +475,12 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
 
 
 class PrecomputedDataset(IterableDataset):
-    def __init__(self, path, model_name, categories, transform=None, train=True):
+    def __init__(self, path, categories, transform=None):
+        '''
+        path should be contain 2 subfolders: frames and labels
+        '''
         self.label_type = "onehot"
-        TYPE = "train" if train else "test"
-        self.path = os.path.join(path, model_name, TYPE)
-        
-        if not os.path.exists(self.path):
-            print("Did not precompute for this specific model, falling back to precomputed dataset of the same input type")
-            #fall back to default 
-            config = yaml.safe_load(open('./config/models.yml', 'r'))
-            model_type = config[model_name]['type']
-            if model_type == 'video':
-                self.path = os.path.join(path, "videomae", TYPE)
-            elif model_type == 'image':
-                self.path = os.path.join(path, "clip", TYPE)
-            else:
-                raise ValueError(f"Model type {model_type} not recognized.")
-            
+        self.path = path
         self.transform = transform
         self.categories = categories
 
@@ -535,16 +519,15 @@ def get_summary(dataset):
     summary['dataset_size'] = len(dataset)
     return summary
 
-def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot", model_name = None, shuffle = False):
+def get_dataset(dataset_name, path, augs=None, label_type = "onehot", shuffle = False):
     if dataset_name == 'UCF101':
-        dataset = UCF101(path, train=train, transform=augs, label_type=label_type)
+        dataset = UCF101(path, transform=augs, label_type=label_type)
     elif dataset_name == 'Caltech101':
-        dataset = CalTech101WithSplit(path, train=train, transform=augs, label_type=label_type)
+        dataset = CalTech101WithSplit(path, transform=augs, label_type=label_type)
     elif dataset_name == 'MikeFrames':
         # dataset = Mike(path, transform=augs, label_type=label_type, train=train)
         dataset = MikeDataset(
             path,
-            train=train, 
             transform=augs,
             label_type=label_type,
             window_size = 1, 
@@ -560,7 +543,6 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
         # dataset = Mike(path, transform=augs, label_type=label_type, train=train)
         dataset = MikeDataset(
             path,
-            train=train, 
             transform=augs,
             label_type=label_type,
             window_size = 1, 
@@ -576,7 +558,6 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
         # dataset = MikeSlidingWindow(path, transform=augs, label_type=label_type, train=train)
         dataset = MikeDataset(
             path, 
-            train=train,
             transform=augs,
             label_type=label_type,
             window_size = 16,
@@ -591,7 +572,6 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
     elif dataset_name == 'AbbyFrames':
         dataset = AbbyDataset(
             path, 
-            train=train, 
             transform=augs, 
             label_type=label_type, 
             window_size=1, 
@@ -605,7 +585,6 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
     elif dataset_name == 'AbbySlidingWindow':
         dataset = AbbyDataset(
             path, 
-            train=train, 
             transform=augs, 
             label_type=label_type, 
             window_size=16, 
@@ -619,16 +598,16 @@ def get_dataset(dataset_name, path, augs=None, train=True, label_type = "onehot"
     elif dataset_name == 'MikePrecomputed': 
         behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         categories = list(behavior_idx_map.keys())
-        dataset = PrecomputedDataset(path, model_name=model_name, categories=categories, transform=augs, train=train)
+        dataset = PrecomputedDataset(path, categories=categories, transform=augs)
     elif dataset_name == 'MikeSlidingWindowPrecomputed':
         behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         categories = list(behavior_idx_map.keys())
-        dataset = PrecomputedDataset(path, model_name=model_name, categories=categories, transform=augs, train=train)
+        dataset = PrecomputedDataset(path, categories=categories, transform=augs)
     elif dataset_name == 'AbbySlidingWindowPrecomputed':
         cur_dir = os.path.dirname(os.path.abspath(__file__))
         full_path = os.path.join(cur_dir, 'abby_dset_categories.json')
         categories = json.load(open(full_path, 'r'))
-        dataset = PrecomputedDataset(path, model_name=model_name, categories=categories, transform=augs, train=train)
+        dataset = PrecomputedDataset(path, categories=categories, transform=augs)
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
     return dataset
