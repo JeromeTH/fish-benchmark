@@ -510,17 +510,20 @@ class PrecomputedDatasetV2(Dataset):
     Dataset mounted on precomputed sliding window clips and labels. 
     Corresponding clips and labels have the same name but live in different folders
     '''
-    def __init__(self, path, categories, transform=None):
+    def __init__(self, input_path, label_path, categories, type = "inputs", transform=None):
         '''
         path should be contain 2 subfolders: frames and labels
         '''
         self.label_type = "onehot"
-        self.path = path
+        self.input_path = input_path
+        self.label_path = label_path
         self.transform = transform
         self.categories = categories
+        self.type = type
+        assert type in ["inputs", "dino_features", "videomae_features"], f"type {type} not recognized. Should be inputs or frames"
 
-        clip_paths = sorted([p for p in get_files_of_type(self.path, ".pt") if "inputs" in p])
-        label_paths = sorted([p for p in get_files_of_type(self.path, ".pt") if "labels" in p])
+        clip_paths = sorted(get_files_of_type(input_path, ".pt"))
+        label_paths = sorted(get_files_of_type(label_path, ".pt"))
 
         self.clip_dict = {os.path.basename(p): p for p in clip_paths}
         self.label_dict = {os.path.basename(p): p for p in label_paths}
@@ -531,8 +534,9 @@ class PrecomputedDatasetV2(Dataset):
     
     def __getitem__(self, idx):
         key = self.keys[idx]
-        clip = torch.load(self.clip_dict[key])
-        label = torch.load(self.label_dict[key])
+        with step_timer(f"loading {key}", verbose=False):
+            clip = torch.load(self.clip_dict[key])
+            label = torch.load(self.label_dict[key])
         if self.transform:
             clip = self.transform(clip)
         return clip, label
