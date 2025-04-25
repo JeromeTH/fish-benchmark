@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import lightning as L
 from transformers import AutoImageProcessor, AutoProcessor
 import torch
+from fish_benchmark.data.preprocessors import TorchVisionPreprocessor
 
 class MLPWithPooling(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim=512):
@@ -104,9 +105,8 @@ def get_input_transform(model_name, do_resize = None):
         transform = lambda img: processor(img, return_tensors="pt").pixel_values.squeeze(0)
         return transform
     elif model_name == 'multipatch_dino':
-        processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
-        transform = lambda img: processor(img, return_tensors="pt").pixel_values.squeeze(0)
-        return transform
+        processor = TorchVisionPreprocessor()
+        return processor
     elif model_name == 'videomae':
         processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
         transform = lambda video: processor(list(video), return_tensors="pt").pixel_values.squeeze(0)

@@ -43,6 +43,9 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(DEST, 'inputs'), exist_ok=True)
     os.makedirs(os.path.join(DEST, 'labels'), exist_ok=True)
     logger.info(f"Saving to {DEST}")
+    TOTAL = len(dataset)
     for i, (clip, label) in enumerate(dataset):
         torch.save(clip.clone(), os.path.join(DEST, 'inputs', f'{ID}_{frame_id_with_padding(i)}.pt'))
         torch.save(label.clone(), os.path.join(DEST, 'labels', f'{ID}_{frame_id_with_padding(i)}.pt'))
+        if i % 100 == 0:
+            logger.info(f"Processed {i}/{TOTAL} clips")

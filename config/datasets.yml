@@ -17,6 +17,16 @@ MikeFramesPatched:
   num_frames: 4
   ours: true
 
+MikeFramesPatchedPrecomputed:
+  path: /share/j_sun/jth264/precomputed/mike_frames_patched
+  label_types: [onehot]
+  type: video
+  training_project: "MikeFramesPatched"
+  preprocessed: false
+  num_frames: 4
+  ours: true
+  
+
 MikeSlidingWindow: 
   path: /share/j_sun/jth264/mike
   precomputed_path: /share/j_sun/jth264/precomputed/mike_sliding_window

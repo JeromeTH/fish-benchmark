@@ -505,6 +505,39 @@ class PrecomputedDataset(IterableDataset):
                 frame = self.transform(frame)
             yield frame, label
 
+class PrecomputedDatasetV2(Dataset):
+    '''
+    Dataset mounted on precomputed sliding window clips and labels. 
+    Corresponding clips and labels have the same name but live in different folders
+    '''
+    def __init__(self, path, categories, transform=None):
+        '''
+        path should be contain 2 subfolders: frames and labels
+        '''
+        self.label_type = "onehot"
+        self.path = path
+        self.transform = transform
+        self.categories = categories
+
+        clip_paths = sorted([p for p in get_files_of_type(self.path, ".pt") if "inputs" in p])
+        label_paths = sorted([p for p in get_files_of_type(self.path, ".pt") if "labels" in p])
+
+        self.clip_dict = {os.path.basename(p): p for p in clip_paths}
+        self.label_dict = {os.path.basename(p): p for p in label_paths}
+        self.keys = list(self.clip_dict.keys() & self.label_dict.keys())
+
+    def __len__(self):
+        return len(self.keys)
+    
+    def __getitem__(self, idx):
+        key = self.keys[idx]
+        clip = torch.load(self.clip_dict[key])
+        label = torch.load(self.label_dict[key])
+        if self.transform:
+            clip = self.transform(clip)
+        return clip, label
+    
+
 def get_summary(dataset):
     summary = {}
     summary['metadata'] = asdict(dataset)
@@ -596,14 +629,16 @@ def get_dataset(dataset_name, path, augs=None, label_type = "onehot", shuffle = 
         behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         categories = list(behavior_idx_map.keys())
         dataset = PrecomputedDataset(path, categories=categories, transform=augs)
+    elif dataset_name == 'MikeFramesPatchedPrecomputed':
+        behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
+        categories = list(behavior_idx_map.keys())
+        dataset = PrecomputedDatasetV2(path, categories=categories, transform=augs)
     elif dataset_name == 'MikeSlidingWindowPrecomputed':
         behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         categories = list(behavior_idx_map.keys())
         dataset = PrecomputedDataset(path, categories=categories, transform=augs)
     elif dataset_name == 'AbbySlidingWindowPrecomputed':
-        cur_dir = os.path.dirname(os.path.abspath(__file__))
-        full_path = os.path.join(cur_dir, 'abby_dset_categories.json')
-        categories = json.load(open(full_path, 'r'))
+        categories = load_from_cur_dir('abby_dset_categories.json')
         dataset = PrecomputedDataset(path, categories=categories, transform=augs)
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
