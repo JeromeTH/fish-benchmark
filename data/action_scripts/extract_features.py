@@ -12,6 +12,10 @@ from fish_benchmark.debug import step_timer
 
 # python data/action_scripts/extract_features.py --model "multipatch_dino" --dataset "MikeFramesPatchedPrecomputed"
 BATCH_SIZE = 32
+PROFILE = False 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
@@ -24,14 +28,18 @@ model_config = yaml.safe_load(open("config/models.yml", "r"))
 
 def save_feature(dest, save_name, feature_tensor):
     path = os.path.join(dest, f"{save_name}.pt")
-    #torch.save(feature_tensor.cpu(), path)
+    torch.save(feature_tensor.cpu(), path)
 
-def parallel_save_features(features, dest_path, video_id, start_frame_id):
-    print(f"Saving features for video {video_id} starting at frame {start_frame_id}")
+def avg_pool(tensor):
+    return torch.mean(tensor, dim=0)
+
+def parallel_save_features(outputs, dest_path, video_id, start_frame_id):
     futures = []
+    os.makedirs(dest_path, exist_ok=True)
     with ThreadPoolExecutor(max_workers=8) as executor:
-        for j in range(features.shape[0]):
-            feature_tensor = features[j].clone()
+        for j in range(outputs.shape[0]):
+            last_hidden_state = outputs[j]
+            feature_tensor = avg_pool(last_hidden_state)
             #print(feature_tensor.shape)
             save_name = f"{video_id}_{frame_id_with_padding(start_frame_id + j)}"
             f = executor.submit(save_feature, dest_path, save_name, feature_tensor)
@@ -50,6 +58,7 @@ def calculate_feature(subset_path, dest_path, video_id, model, input_transform):
                 transform=input_transform
             )
     print("loaded data")
+    print(len(dataset))
     # for item in tqdm(dataset):
     #     pass
     dataloader = DataLoader(
@@ -60,11 +69,14 @@ def calculate_feature(subset_path, dest_path, video_id, model, input_transform):
         pin_memory=True
     )
     print("loaded dataloader")
-    for i, (batch_clip, _) in enumerate(dataloader):
-        with step_timer("Feature Extraction"), torch.no_grad():
+    for i, (batch_clip, _) in tqdm(enumerate(dataloader)):
+        #print(f"Processing batch {i + 1}/{len(dataloader)}")
+        batch_clip = batch_clip.to(device)
+        with step_timer("Feature Extraction", verbose=PROFILE), torch.no_grad():
             features = model(batch_clip)
         assert features.shape[0] == BATCH_SIZE, f"Batch size mismatch: {features.shape[0]} vs {BATCH_SIZE}"
-        parallel_save_features(features, dest_path, video_id, i * BATCH_SIZE)
+        with step_timer("Saving Features", verbose=PROFILE):
+            parallel_save_features(features, dest_path, video_id, i * BATCH_SIZE)
 
 if __name__ == '__main__':
     args = get_args()
@@ -76,11 +88,12 @@ if __name__ == '__main__':
     assert dataset_config[DATASET]['type'] == model_config[MODEL]['type'], f"Model {MODEL} and dataset {DATASET} do not match"
     # Load the model
     model = get_pretrained_model(MODEL)
+    model = model.to(device)
     input_transform = get_input_transform(MODEL)
     INPUT_PATH = os.path.join(PATH, 'inputs')
     for root, dirs, files in os.walk(INPUT_PATH):
         #check if there is a .pt file
-        if any(file.endswith('.pt') for file in files):
+        if any(file.endswith('.npy') for file in files):
             #This is a subset of the dataset
             rel_path = os.path.relpath(root, INPUT_PATH)
             dest_path = os.path.join(DEST, rel_path)

@@ -5,11 +5,13 @@ import torch
 from fish_benchmark.data.dataset import get_dataset
 from fish_benchmark.utils import frame_id_with_padding, setup_logger
 from tqdm import tqdm
+import numpy as np
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
-    parser.add_argument("--dest", required=True)
+    parser.add_argument("--input_dest", required=True)
+    parser.add_argument("--label_dest", required=True)
     parser.add_argument("--id", required=True)
     parser.add_argument("--dataset", required=True)
     return parser.parse_args()
@@ -22,7 +24,8 @@ if __name__ == '__main__':
     args = get_args()
     SOURCE = args.source
     DATASET = args.dataset
-    DEST = args.dest
+    INPUT_DEST = args.input_dest
+    LABEL_DEST = args.label_dest
     ID = args.id
     dataset_config = yaml.safe_load(open("config/datasets.yml", "r"))
     
@@ -40,12 +43,14 @@ if __name__ == '__main__':
         augs=None,
         shuffle=False
     )
-    os.makedirs(os.path.join(DEST, 'inputs'), exist_ok=True)
-    os.makedirs(os.path.join(DEST, 'labels'), exist_ok=True)
-    logger.info(f"Saving to {DEST}")
+    os.makedirs(INPUT_DEST, exist_ok=True)
+    os.makedirs(LABEL_DEST, exist_ok=True)
+    logger.info(f"Saving input to {INPUT_DEST}, label to {LABEL_DEST}")
     TOTAL = len(dataset)
     for i, (clip, label) in enumerate(dataset):
-        torch.save(clip.clone(), os.path.join(DEST, 'inputs', f'{ID}_{frame_id_with_padding(i)}.pt'))
-        torch.save(label.clone(), os.path.join(DEST, 'labels', f'{ID}_{frame_id_with_padding(i)}.pt'))
+        clip_np = clip.clone().cpu().numpy()
+        label_np = label.clone().cpu().numpy()
+        np.save(os.path.join(INPUT_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), clip_np)
+        np.save(os.path.join(LABEL_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), label_np)
         if i % 100 == 0:
             logger.info(f"Processed {i}/{TOTAL} clips")

@@ -280,7 +280,7 @@ class BaseSlidingWindowDataset:
         relevant_annotations = list(self.annotations_window_queue)[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
         relevant_labels = torch.stack([self.annotation_to_label(annotation) for annotation in relevant_annotations]) 
         relevant_labels = relevant_labels[:, :len(self.categories)] #drop extra incomplete labels
-        unioned_labels = torch.any(relevant_labels.bool(), dim=0).float()
+        unioned_labels = torch.any(relevant_labels.bool(), dim=0)
         return unioned_labels
 
     def grid_patches(self, img):
@@ -313,8 +313,7 @@ class BaseSlidingWindowDataset:
         '''
         np.ndarray clip has shape (samples_per_window * patch_per_sample, height, width, channels)
         '''
-        clip = torch.from_numpy(clip).permute(0, 3, 1, 2)
-        clip = clip.float() / 255.0
+        clip = torch.from_numpy(clip).permute(0, 3, 1, 2).to(torch.uint8)
         return clip
 
     def get_latest_clip(self):
@@ -522,8 +521,8 @@ class PrecomputedDatasetV2(Dataset):
         self.type = type
         assert type in ["inputs", "dino_features", "videomae_features"], f"type {type} not recognized. Should be inputs or frames"
 
-        clip_paths = sorted(get_files_of_type(input_path, ".pt"))
-        label_paths = sorted(get_files_of_type(label_path, ".pt"))
+        clip_paths = sorted(get_files_of_type(input_path, ".npy"))
+        label_paths = sorted(get_files_of_type(label_path, ".npy"))
 
         self.clip_dict = {os.path.basename(p): p for p in clip_paths}
         self.label_dict = {os.path.basename(p): p for p in label_paths}
@@ -535,8 +534,8 @@ class PrecomputedDatasetV2(Dataset):
     def __getitem__(self, idx):
         key = self.keys[idx]
         with step_timer(f"loading {key}", verbose=False):
-            clip = torch.load(self.clip_dict[key])
-            label = torch.load(self.label_dict[key])
+            clip = torch.from_numpy(np.load(self.clip_dict[key]))
+            label = torch.from_numpy(np.load(self.label_dict[key]))
         if self.transform:
             clip = self.transform(clip)
         return clip, label

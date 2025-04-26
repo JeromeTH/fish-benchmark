@@ -4,7 +4,7 @@ import yaml
 from fish_benchmark.utils import setup_logger
 
 # Example config values (replace with loading from a file if needed)
-TARGETS = ["MikeFrames"]
+TARGETS = ["MikeFramesPatched"]
 
 config = yaml.safe_load(open("config/datasets.yml", "r"))
 logger = setup_logger(
@@ -18,13 +18,14 @@ def main():
             for SUBSET in os.listdir(root_dir):
                 assert(os.path.isdir(os.path.join(root_dir, SUBSET))), f"Subset path {SUBSET} is not a directory"
                 SOURCE = os.path.join(root_dir, SUBSET)
-                DEST = os.path.join(dest_root_dir, SUBSET)
+                INPUT_DEST = os.path.join(dest_root_dir, 'inputs', SUBSET)
+                LABEL_DEST = os.path.join(dest_root_dir, 'labels', SUBSET)
                 output_dir = os.path.join('logs', 'precompute_sliding_window', TYPE, DATASET, SUBSET)
                 os.makedirs(output_dir, exist_ok=True)
                 # submit a job for each subset
                 wrap_cmd = (
                     f'python data/action_scripts/preprocess_sliding_window.py '
-                    f'--source "{SOURCE}" --dest "{DEST}" --id "{SUBSET}" --dataset "{DATASET}"'
+                    f'--source "{SOURCE}" --input_dest "{INPUT_DEST}" --label_dest "{LABEL_DEST}" --id "{SUBSET}" --dataset "{DATASET}"'
                 )
                 out = os.path.join(output_dir, f"{DATASET}_{TYPE}_{SUBSET}.out")
                 err = os.path.join(output_dir, f"{DATASET}_{TYPE}_{SUBSET}.err")
