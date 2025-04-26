@@ -6,26 +6,24 @@ from transformers import AutoImageProcessor, AutoProcessor
 import torch
 from fish_benchmark.data.preprocessors import TorchVisionPreprocessor
 
-class MLPWithPooling(nn.Module):
+class MeanPooling(nn.Module):
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        return x.mean(dim=self.dim)
+    
+
+class MLP(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim=512):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, last_hidden_state):
-        x = last_hidden_state.mean(dim=1)
+    def forward(self, x):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-        return x
-    
-class LinearWithPooling(nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super().__init__()
-        self.fc = nn.Linear(input_dim, output_dim)
-
-    def forward(self, last_hidden_state):
-        x = last_hidden_state.mean(dim=1)
-        x = self.fc(x)
         return x
 
 class AttentionBlock(nn.Module):
@@ -71,13 +69,30 @@ class BaseModel(nn.Module):
 
 def get_classifier(input_dim, output_dim, type):
     if type == 'mlp':
-        return MLPWithPooling(input_dim, output_dim)
+        return MLP(input_dim, output_dim)
+    elif type == 'linear':
+        return nn.Linear(input_dim, output_dim)
+    else:
+        raise ValueError(f"Unknown classifier type: {type}")
+
+def get_classifier_with_pooling(input_dim, output_dim, type):
+    if type == 'mlp':
+        return nn.Sequential(
+            MeanPooling(dim = 1), 
+            MLP(input_dim, output_dim)
+        )
+
     elif type == 'attention':
         return AttentionBlock(input_dim, output_dim)
     elif type == 'linear':
-        return LinearWithPooling(input_dim, output_dim)
+        return nn.Sequential(
+            MeanPooling(dim = 1), 
+            nn.Linear(input_dim, output_dim)
+        )
     else:
         raise ValueError(f"Unknown classifier type: {type}")
+    
+
     
 def get_pretrained_model(model_name):
     if model_name == 'clip':
@@ -128,7 +143,7 @@ class MediaClassifier(nn.Module):
         self.model = get_pretrained_model(pretrained_model) 
         self.hidden_size = self.model.config.hidden_size
         self.num_classes = num_classes
-        self.classifier = get_classifier(self.hidden_size, num_classes, classifier_type)
+        self.classifier = get_classifier_with_pooling(self.hidden_size, num_classes, classifier_type)
         if freeze_pretrained:
             for param in self.model.parameters():
                 param.requires_grad = False

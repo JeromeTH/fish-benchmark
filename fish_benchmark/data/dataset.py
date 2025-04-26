@@ -509,7 +509,7 @@ class PrecomputedDatasetV2(Dataset):
     Dataset mounted on precomputed sliding window clips and labels. 
     Corresponding clips and labels have the same name but live in different folders
     '''
-    def __init__(self, input_path, label_path, categories, type = "inputs", transform=None):
+    def __init__(self, input_path, label_path, categories, stage = "inputs", transform=None):
         '''
         path should be contain 2 subfolders: frames and labels
         '''
@@ -518,8 +518,6 @@ class PrecomputedDatasetV2(Dataset):
         self.label_path = label_path
         self.transform = transform
         self.categories = categories
-        self.type = type
-        assert type in ["inputs", "dino_features", "videomae_features"], f"type {type} not recognized. Should be inputs or frames"
 
         clip_paths = sorted(get_files_of_type(input_path, ".npy"))
         label_paths = sorted(get_files_of_type(label_path, ".npy"))
@@ -534,8 +532,8 @@ class PrecomputedDatasetV2(Dataset):
     def __getitem__(self, idx):
         key = self.keys[idx]
         with step_timer(f"loading {key}", verbose=False):
-            clip = torch.from_numpy(np.load(self.clip_dict[key]))
-            label = torch.from_numpy(np.load(self.label_dict[key]))
+            clip = torch.from_numpy(np.load(self.clip_dict[key])).float()
+            label = torch.from_numpy(np.load(self.label_dict[key])).float() 
         if self.transform:
             clip = self.transform(clip)
         return clip, label
@@ -645,4 +643,17 @@ def get_dataset(dataset_name, path, augs=None, label_type = "onehot", shuffle = 
         dataset = PrecomputedDataset(path, categories=categories, transform=augs)
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
+    return dataset
+
+
+def get_precomputed_dataset(name, path, augs=None, stage = "features", label_type = "onehot", shuffle = False):
+    assert stage in ["multipatch_dino_features", "inputs"], f"stage {stage} not recognized. Should be features or inputs"
+    if name == 'MikeFramesPatchedPrecomputed':
+        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
+                                    label_path = os.path.join(path, 'labels'),
+                                    categories=load_from_cur_dir('behavior_categories.json'), transform=augs)
+    elif name == 'AbbyPrecomputed':
+        dataset = PrecomputedDatasetV2(path, categories=load_from_cur_dir('abby_dset_categories.json'), transform=augs)
+    else:
+        raise ValueError(f"Dataset {name} not recognized.")
     return dataset

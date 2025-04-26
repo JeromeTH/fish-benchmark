@@ -12,6 +12,7 @@ import yaml
 import argparse
 from lightning.pytorch.callbacks import ModelCheckpoint
 import sys
+from artifact import log_best_model, log_dataset_summary
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -25,35 +26,6 @@ def get_args():
     parser.add_argument("--shuffle", default=True)
 
     return parser.parse_args()
-
-def log_best_model(checkpoint_callback, run):
-    if checkpoint_callback.best_model_path:
-        artifact = wandb.Artifact(
-            name=f"model-{run.id}",
-            type="model",
-            metadata={
-                "tags": run.tags,
-                "config": dict(run.config),
-                "notes": run.notes
-            }
-        )
-        artifact.add_file(checkpoint_callback.best_model_path)
-        run.log_artifact(artifact)
-
-def log_dataset_summary(dataset, run):
-    #store summary
-    summary = get_summary(dataset)
-    artifact = wandb.Artifact(
-        name=f"dataset-{run.id}",
-        type="dataset",
-        metadata={
-            "tags": run.tags,
-            "config": dict(run.config),
-            "notes": run.notes
-        }
-    )
-    artifact.add_file(summary)
-    run.log_artifact(artifact)
 
 if __name__ == '__main__':
     args = get_args()

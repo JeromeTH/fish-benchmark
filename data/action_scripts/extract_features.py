@@ -9,6 +9,7 @@ import os
 from tqdm import tqdm
 from fish_benchmark.utils import frame_id_with_padding
 from fish_benchmark.debug import step_timer
+import numpy as np
 
 # python data/action_scripts/extract_features.py --model "multipatch_dino" --dataset "MikeFramesPatchedPrecomputed"
 BATCH_SIZE = 32
@@ -27,8 +28,8 @@ dataset_config = yaml.safe_load(open("config/datasets.yml", "r"))
 model_config = yaml.safe_load(open("config/models.yml", "r"))
 
 def save_feature(dest, save_name, feature_tensor):
-    path = os.path.join(dest, f"{save_name}.pt")
-    torch.save(feature_tensor.cpu(), path)
+    path = os.path.join(dest, f"{save_name}.npy")
+    np.save(path, feature_tensor.cpu().numpy())
 
 def avg_pool(tensor):
     return torch.mean(tensor, dim=0)
@@ -73,10 +74,9 @@ def calculate_feature(subset_path, dest_path, video_id, model, input_transform):
         #print(f"Processing batch {i + 1}/{len(dataloader)}")
         batch_clip = batch_clip.to(device)
         with step_timer("Feature Extraction", verbose=PROFILE), torch.no_grad():
-            features = model(batch_clip)
-        assert features.shape[0] == BATCH_SIZE, f"Batch size mismatch: {features.shape[0]} vs {BATCH_SIZE}"
+            outputs = model(batch_clip)
         with step_timer("Saving Features", verbose=PROFILE):
-            parallel_save_features(features, dest_path, video_id, i * BATCH_SIZE)
+            parallel_save_features(outputs, dest_path, video_id, i * BATCH_SIZE)
 
 if __name__ == '__main__':
     args = get_args()
@@ -98,5 +98,5 @@ if __name__ == '__main__':
             rel_path = os.path.relpath(root, INPUT_PATH)
             dest_path = os.path.join(DEST, rel_path)
             video_id = os.path.basename(root)
-            calculate_feature(root, dest_path, video_id, model, input_transform)   
-            break
+            calculate_feature(root, dest_path, video_id, model, input_transform)  
+            break 
