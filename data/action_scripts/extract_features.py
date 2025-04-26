@@ -16,12 +16,16 @@ BATCH_SIZE = 32
 PROFILE = False 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
-
+#This script is runned like this: 
+# 'python data/action_scripts/extract_features.py --subset_path "{SUBSET_PATH}" --label_path "{LABEL_PATH}" --dest_path "{DEST_PATH}" --id "{SUBSET_ID}" '
 def get_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--subset_path", required=True)
+    parser.add_argument("--label_path", required=True)
+    parser.add_argument("--dest_path", required=True)
+    parser.add_argument("--id", required=True)
     parser.add_argument("--model", required=True)
-    parser.add_argument("--dataset", required=True)
-    parser.add_argument("--train", default = True)
+    #dataset is inferred from the subset_path
     return parser.parse_args()
 
 dataset_config = yaml.safe_load(open("config/datasets.yml", "r"))
@@ -50,11 +54,11 @@ def parallel_save_features(outputs, dest_path, video_id, start_frame_id):
         for f in futures:
             f.result()
     
-def calculate_feature(subset_path, dest_path, video_id, model, input_transform):
+def calculate_feature(subset_path, label_path, dest_path, video_id, model, input_transform):
     print(f"loading data mounted at {subset_path}")
     dataset = PrecomputedDatasetV2(
                 input_path=subset_path,
-                label_path = os.path.join(PATH, 'labels'),  
+                label_path = label_path,  
                 categories=None,
                 transform=input_transform
             )
@@ -80,23 +84,19 @@ def calculate_feature(subset_path, dest_path, video_id, model, input_transform):
 
 if __name__ == '__main__':
     args = get_args()
+    SUBSET_PATH = args.subset_path
+    LABEL_PATH = args.label_path
+    DEST_PATH = args.dest_path
+    VIDEO_ID = args.id
     MODEL = args.model
-    DATASET = args.dataset
-    TRAIN = args.train
-    PATH = os.path.join(dataset_config[DATASET]['path'], 'train') if TRAIN else os.path.join(dataset_config[DATASET]['path'], 'test')
-    DEST = os.path.join(PATH, f'{MODEL}_features')
-    assert dataset_config[DATASET]['type'] == model_config[MODEL]['type'], f"Model {MODEL} and dataset {DATASET} do not match"
-    # Load the model
+
     model = get_pretrained_model(MODEL)
     model = model.to(device)
     input_transform = get_input_transform(MODEL)
-    INPUT_PATH = os.path.join(PATH, 'inputs')
-    for root, dirs, files in os.walk(INPUT_PATH):
-        #check if there is a .pt file
-        if any(file.endswith('.npy') for file in files):
-            #This is a subset of the dataset
-            rel_path = os.path.relpath(root, INPUT_PATH)
-            dest_path = os.path.join(DEST, rel_path)
-            video_id = os.path.basename(root)
-            calculate_feature(root, dest_path, video_id, model, input_transform)  
-            break 
+
+    calculate_feature(subset_path=SUBSET_PATH, 
+                    label_path=LABEL_PATH, 
+                    dest_path=DEST_PATH, 
+                    video_id=VIDEO_ID, 
+                    model=model, 
+                    input_transform=input_transform)  

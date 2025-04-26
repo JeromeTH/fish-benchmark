@@ -35,6 +35,7 @@ def main():
                     f"-e {err} "
                     f"-N 1 -n 1 --get-user-env --requeue --time=infinite "
                     f"--cpus-per-task=4 --mem=256G --partition=gpu "
+                    f"--gres=gpu:1 "
                     f'--wrap="{wrap_cmd}"'
                 )
                 logger.info(f"Submitted job for {DATASET}_{TYPE}_{SUBSET} with command: {command}")
