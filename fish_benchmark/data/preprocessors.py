@@ -17,5 +17,6 @@ class TorchVisionPreprocessor:
     def __call__(self, image_tensor: torch.Tensor) -> torch.Tensor:
         image_tensor = self.resize(image_tensor)
         image_tensor = self.crop(image_tensor)
+        image_tensor = image_tensor/ 255.0
         image_tensor = (image_tensor - self.mean) / self.std
         return image_tensor

@@ -10,7 +10,7 @@ MikeFrames:
 
 MikeFramesPatched: 
   path: /share/j_sun/jth264/mike
-  precomputed_path: /share/j_sun/jth264/precomputed/mike_frames_patched_v2
+  precomputed_path: /share/j_sun/jth264/precomputed/mike_frames_patched_v3
   label_types: [onehot]
   type: video
   training_project: "MikeFramesPatched"
@@ -19,7 +19,7 @@ MikeFramesPatched:
   ours: true
 
 MikeFramesPatchedPrecomputed:
-  path: /share/j_sun/jth264/precomputed/mike_frames_patched_v2
+  path: /share/j_sun/jth264/precomputed/mike_frames_patched_v3
   label_types: [onehot]
   type: video
   training_project: "MikeFramesPatched"
