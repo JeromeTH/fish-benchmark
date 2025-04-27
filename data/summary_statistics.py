@@ -5,17 +5,17 @@ from dataclasses import asdict
 import torch
 from itertools import islice
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
-SPECIFIC_DATASETS = None # ['MikeFrames']
+SPECIFIC_DATASETS = ['UCF101Frames']
 if __name__ == '__main__':
     for dataset_name in dataset_config:
+        print(dataset_name)
         if dataset_config[dataset_name]['preprocessed']:continue
         if SPECIFIC_DATASETS and dataset_name not in SPECIFIC_DATASETS: continue
-        if not dataset_config[dataset_name]['ours']: continue
+        # if not dataset_config[dataset_name]['ours']: continue
         print(f"Processing {dataset_name}")
         dataset = get_dataset(dataset_name, 
-                              dataset_config[dataset_name]['path'], 
+                              dataset_config[dataset_name]['path'] + '/train', 
                               augs=None, 
-                              train=True, 
                               label_type='onehot', 
                               shuffle=True)
         summary = get_summary(dataset)

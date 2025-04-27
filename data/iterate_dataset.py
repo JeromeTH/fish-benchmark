@@ -19,9 +19,8 @@ if __name__ == '__main__':
     input_transform = get_input_transform(MODEL) if MODEL else None
     dataset = get_dataset(
         DATASET, 
-        path = config[DATASET]['path'], 
+        path = config[DATASET]['path'] + '/train', 
         augs=input_transform,
-        train=True, 
         shuffle=True
     )
     if config[DATASET]['ours']: print(asdict(dataset))

@@ -469,6 +469,15 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
             yield from self.scan(annotated_frame_iterator())
             yield from self.flush()
 
+def get_dicts_and_common_keys(list1, list2):
+    '''
+    lists are file paths and keys are file names
+    '''
+    dict1 = {os.path.basename(p).split('.')[0]: p for p in list1}
+    dict2 = {os.path.basename(p).split('.')[0]: p for p in list2}
+    common_keys = list(dict1.keys() & dict2.keys())
+    return dict1, dict2, common_keys
+
 class UCF101V2(BaseSlidingWindowDataset):
     def __init__(self, path, 
                  transform=None, 
@@ -485,7 +494,7 @@ class UCF101V2(BaseSlidingWindowDataset):
         BaseSlidingWindowDataset.__init__(
             self,
             input_transform=transform,
-            annotation_to_label=lambda x: onehot(len(self.categories), [self.categories.index(behavior) for behavior in parse_annotation(x)]),
+            annotation_to_label=lambda x: onehot(len(self.categories), [x]),
             label_type=label_type,
             window_size=window_size,
             tolerance_region=tolerance_region,
@@ -494,26 +503,36 @@ class UCF101V2(BaseSlidingWindowDataset):
             categories=self.categories,    
             is_image_dataset=is_image_dataset, 
             shuffle=shuffle, 
-            patch_grid_dim=patch_grid_dim
+            patch_grid_dim=patch_grid_dim, 
+            temporal_sample_interval=1,
         )
 
-    def frame_annotation_pairs(video_path, label_idx):
+    def __len__(self):
+        count = 0
+        for video_path in get_files_of_type(self.path, ".avi"):
+            container = av.open(video_path)
+            video_frames_count = container.streams.video[0].frames
+            count += self.downsampled_length(video_frames_count)
+        return count
+    
+    def frame_annotation_pairs(self, video_path, label_idx):
         #read video using av
         container = av.open(video_path)
         for i, frame in enumerate(container.decode(video=0)):
             yield frame.to_image(), label_idx
 
     def __iter__(self):
-        for class_name in os.listdir(self.path):
-            class_path = os.path.join(self.path, class_name)
-            if not os.path.isdir(class_path): continue
-            class_idx = self.categories.index(class_name)
-            for video_name in os.listdir(class_path):
-                video_path = os.path.join(class_path, video_name) 
-                if not os.path.isfile(video_path): continue
-                yield from self.scan(self.frame_annotation_pairs(video_path, class_idx))
-                yield from self.flush()
-        
+        video_paths = sorted(get_files_of_type(self.path, ".avi"))
+        label_paths = sorted(get_files_of_type(self.path, ".txt"))
+        video_dict, label_dict, keys = get_dicts_and_common_keys(video_paths, label_paths)
+        for key in keys:
+            video_path = video_dict[key]
+            label_path = label_dict[key]
+            with open(label_path, 'r') as f:
+                label_idx = int(f.read().strip())
+            yield from self.scan(self.frame_annotation_pairs(video_path, label_idx))
+            yield from self.flush()
+
 
 class PrecomputedDataset(IterableDataset):
     def __init__(self, path, categories, transform=None):
@@ -568,9 +587,7 @@ class PrecomputedDatasetV2(Dataset):
             label_paths = sorted(get_files_of_type(label_path, ".npy"))
 
         with step_timer("Matching keys", verbose=True):
-            self.clip_dict = {os.path.basename(p): p for p in clip_paths}
-            self.label_dict = {os.path.basename(p): p for p in label_paths}
-            self.keys = list(self.clip_dict.keys() & self.label_dict.keys())
+            self.clip_dict, self.label_dict, self.keys = get_dicts_and_common_keys(clip_paths, label_paths)
 
     def __len__(self):
         return len(self.keys)
@@ -643,7 +660,7 @@ def get_dataset(dataset_name, path, augs=None, label_type = "onehot", shuffle = 
             step_size = 1, 
             is_image_dataset=False, 
             shuffle = shuffle,
-            patch_grid_dim=2, 
+            patch_grid_dim=1, 
             temporal_sample_interval=1
         )
     elif dataset_name == 'AbbyFrames':
@@ -682,7 +699,7 @@ def get_dataset(dataset_name, path, augs=None, label_type = "onehot", shuffle = 
             samples_per_window=1, 
             step_size=1, 
             is_image_dataset=True, 
-            shuffle = shuffle
+            shuffle = shuffle, 
         )
     elif dataset_name == 'UCF101SlidingWindow':
         dataset = UCF101V2(
@@ -694,7 +711,7 @@ def get_dataset(dataset_name, path, augs=None, label_type = "onehot", shuffle = 
             samples_per_window=16, 
             step_size=1, 
             is_image_dataset=False, 
-            shuffle = shuffle
+            shuffle = shuffle, 
         )
     elif dataset_name == 'MikePrecomputed': 
         behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
