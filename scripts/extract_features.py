@@ -5,8 +5,8 @@ from fish_benchmark.utils import setup_logger
 import subprocess
 import argparse
 
-TARGET_MODELS = ['multipatch_dino']
-TARGET_DATASETS = ['MikeFramesPatchedPrecomputed']
+TARGET_MODELS = ['videomae']
+TARGET_DATASETS = ['AbbySlidingWindowPrecomputed']
 model_config = yaml.safe_load(open("config/models.yml", "r"))
 dataset_config = yaml.safe_load(open("config/datasets.yml", "r"))
 device = 'cuda' if torch.cuda.is_available() else 'cpu'

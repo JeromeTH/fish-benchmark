@@ -469,6 +469,51 @@ class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
             yield from self.scan(annotated_frame_iterator())
             yield from self.flush()
 
+class UCF101V2(BaseSlidingWindowDataset):
+    def __init__(self, path, 
+                 transform=None, 
+                 label_type = "categorical", 
+                 window_size=16, 
+                 tolerance_region = 7, 
+                 samples_per_window = 16, 
+                 step_size = 1, 
+                 is_image_dataset = False, 
+                 shuffle = False, 
+                 patch_grid_dim = 1):
+        self.path = path
+        self.categories = load_from_cur_dir('ucf101_categories.json')
+        BaseSlidingWindowDataset.__init__(
+            self,
+            input_transform=transform,
+            annotation_to_label=lambda x: onehot(len(self.categories), [self.categories.index(behavior) for behavior in parse_annotation(x)]),
+            label_type=label_type,
+            window_size=window_size,
+            tolerance_region=tolerance_region,
+            samples_per_window=samples_per_window,
+            step_size=step_size,
+            categories=self.categories,    
+            is_image_dataset=is_image_dataset, 
+            shuffle=shuffle, 
+            patch_grid_dim=patch_grid_dim
+        )
+
+    def frame_annotation_pairs(video_path, label_idx):
+        #read video using av
+        container = av.open(video_path)
+        for i, frame in enumerate(container.decode(video=0)):
+            yield frame.to_image(), label_idx
+
+    def __iter__(self):
+        for class_name in os.listdir(self.path):
+            class_path = os.path.join(self.path, class_name)
+            if not os.path.isdir(class_path): continue
+            class_idx = self.categories.index(class_name)
+            for video_name in os.listdir(class_path):
+                video_path = os.path.join(class_path, video_name) 
+                if not os.path.isfile(video_path): continue
+                yield from self.scan(self.frame_annotation_pairs(video_path, class_idx))
+                yield from self.flush()
+        
 
 class PrecomputedDataset(IterableDataset):
     def __init__(self, path, categories, transform=None):
@@ -518,13 +563,14 @@ class PrecomputedDatasetV2(Dataset):
         self.label_path = label_path
         self.transform = transform
         self.categories = categories
+        with step_timer("Retrieving files", verbose=True):  
+            clip_paths = sorted(get_files_of_type(input_path, ".npy"))
+            label_paths = sorted(get_files_of_type(label_path, ".npy"))
 
-        clip_paths = sorted(get_files_of_type(input_path, ".npy"))
-        label_paths = sorted(get_files_of_type(label_path, ".npy"))
-
-        self.clip_dict = {os.path.basename(p): p for p in clip_paths}
-        self.label_dict = {os.path.basename(p): p for p in label_paths}
-        self.keys = list(self.clip_dict.keys() & self.label_dict.keys())
+        with step_timer("Matching keys", verbose=True):
+            self.clip_dict = {os.path.basename(p): p for p in clip_paths}
+            self.label_dict = {os.path.basename(p): p for p in label_paths}
+            self.keys = list(self.clip_dict.keys() & self.label_dict.keys())
 
     def __len__(self):
         return len(self.keys)
@@ -626,6 +672,30 @@ def get_dataset(dataset_name, path, augs=None, label_type = "onehot", shuffle = 
             shuffle = shuffle, 
             temporal_sample_interval=2
         )
+    elif dataset_name == 'UCF101Frames':
+        dataset = UCF101V2(
+            path, 
+            transform=augs, 
+            label_type=label_type, 
+            window_size=1, 
+            tolerance_region = 0, 
+            samples_per_window=1, 
+            step_size=1, 
+            is_image_dataset=True, 
+            shuffle = shuffle
+        )
+    elif dataset_name == 'UCF101SlidingWindow':
+        dataset = UCF101V2(
+            path, 
+            transform=augs, 
+            label_type=label_type, 
+            window_size=16, 
+            tolerance_region = 7,
+            samples_per_window=16, 
+            step_size=1, 
+            is_image_dataset=False, 
+            shuffle = shuffle
+        )
     elif dataset_name == 'MikePrecomputed': 
         behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
         categories = list(behavior_idx_map.keys())
@@ -647,13 +717,19 @@ def get_dataset(dataset_name, path, augs=None, label_type = "onehot", shuffle = 
 
 
 def get_precomputed_dataset(name, path, augs=None, stage = "features", label_type = "onehot", shuffle = False):
-    assert stage in ["multipatch_dino_features", "inputs"], f"stage {stage} not recognized. Should be features or inputs"
+    assert stage in ["multipatch_dino_features", "inputs", "dino_features", "videomae_features"], f"stage {stage} not recognized. Should be features or inputs"
     if name == 'MikeFramesPatchedPrecomputed':
         dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
                                     label_path = os.path.join(path, 'labels'),
                                     categories=load_from_cur_dir('behavior_categories.json'), transform=augs)
-    elif name == 'AbbyPrecomputed':
-        dataset = PrecomputedDatasetV2(path, categories=load_from_cur_dir('abby_dset_categories.json'), transform=augs)
+    elif name == 'AbbyFramesPrecomputed':
+        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
+                                       label_path = os.path.join(path, 'labels'),
+                                    categories=load_from_cur_dir('abby_dset_categories.json'), transform=augs)
+    elif name == 'AbbySlidingWindowPrecomputed':
+        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
+                                       label_path = os.path.join(path, 'labels'),
+                                    categories=load_from_cur_dir('abby_dset_categories.json'), transform=augs)
     else:
         raise ValueError(f"Dataset {name} not recognized.")
     return dataset

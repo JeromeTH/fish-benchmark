@@ -15,7 +15,8 @@ import sys
 from artifact import log_best_model, log_dataset_summary
 import os
 # python training/head.py --classifier "mlp" --dataset "MikeFramesPatchedPrecomputed" --model "multipatch_dino" 
-
+# python training/head.py --classifier "mlp" --dataset "AbbyFramesPrecomputed" --model "dino"
+# python training/head.py --classifier "mlp" --dataset "AbbySlidingWindowPrecomputed" --model "videomae"
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--classifier", required=True)

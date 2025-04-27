@@ -40,7 +40,7 @@ MikeSlidingWindow:
 
 AbbyFrames:
   path: /share/j_sun/jth264/abby
-  precomputed_path: /share/j_sun/jth264/precomputed/abby_frames
+  precomputed_path: /share/j_sun/jth264/precomputed/abby_frames 
   label_types: [onehot]
   type: image
   preprocessed: false
@@ -57,8 +57,17 @@ AbbySlidingWindow:
   training_project: "AbbySlidingWindow"
   ours: true
 
+AbbyFramesPrecomputed:
+  path: /share/j_sun/jth264/precomputed/abby_frames
+  label_types: [onehot]
+  type: image
+  preprocessed: true
+  training_project: "AbbyFrames"
+  ours: true
+
+
 AbbySlidingWindowPrecomputed:
-  path: /share/j_sun/jth264/abby_precomputed
+  path: /share/j_sun/jth264/precomputed/abby_sliding_window
   label_types: [onehot]
   type: video
   num_frames: 16
@@ -74,6 +83,25 @@ UCF101:
   num_frames: 16
   preprocessed: false
   training_project: "UCF101"
+  ours: false
+
+UCF101Frames:
+  path: /share/j_sun/jth264/UCF101_subset
+  precomputed_path: /share/j_sun/jth264/precomputed/UCF101_frames
+  label_types: [onehot]
+  type: image
+  preprocessed: false
+  training_project: "UCF101Frames"
+  ours: false
+
+UCF101SlidingWindow:
+  path: /share/j_sun/jth264/UCF101_subset
+  precomputed_path: /share/j_sun/jth264/precomputed/UCF101_sliding_window
+  label_types: [onehot]
+  type: video
+  num_frames: 16
+  preprocessed: false
+  training_project: "UCF101SlidingWindow"
   ours: false
   
 Caltech101: 

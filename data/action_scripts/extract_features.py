@@ -82,6 +82,7 @@ def calculate_feature(subset_path, label_path, dest_path, video_id, model, input
         with step_timer("Saving Features", verbose=PROFILE):
             parallel_save_features(outputs, dest_path, video_id, i * BATCH_SIZE)
 
+
 if __name__ == '__main__':
     args = get_args()
     SUBSET_PATH = args.subset_path
