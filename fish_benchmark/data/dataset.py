@@ -747,6 +747,14 @@ def get_precomputed_dataset(name, path, augs=None, stage = "features", label_typ
         dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
                                        label_path = os.path.join(path, 'labels'),
                                     categories=load_from_cur_dir('abby_dset_categories.json'), transform=augs)
+    elif name == 'UCF101FramesPrecomputed':
+        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
+                                       label_path = os.path.join(path, 'labels'),
+                                    categories=load_from_cur_dir('ucf101_categories.json'), transform=augs)
+    elif name == 'UCF101SlidingWindowPrecomputed':
+        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
+                                       label_path = os.path.join(path, 'labels'),
+                                    categories=load_from_cur_dir('ucf101_categories.json'), transform=augs)
     else:
         raise ValueError(f"Dataset {name} not recognized.")
     return dataset

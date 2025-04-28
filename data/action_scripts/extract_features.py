@@ -1,4 +1,4 @@
-from fish_benchmark.models import get_pretrained_model, get_input_transform
+from fish_benchmark.models import get_pretrained_model, get_input_transform, ModelBuilder
 from fish_benchmark.data.dataset import PrecomputedDatasetV2
 import yaml 
 import argparse
@@ -11,7 +11,6 @@ from fish_benchmark.utils import frame_id_with_padding
 from fish_benchmark.debug import step_timer
 import numpy as np
 
-# python data/action_scripts/extract_features.py --model "multipatch_dino" --dataset "MikeFramesPatchedPrecomputed"
 BATCH_SIZE = 32
 PROFILE = False 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -35,16 +34,12 @@ def save_feature(dest, save_name, feature_tensor):
     path = os.path.join(dest, f"{save_name}.npy")
     np.save(path, feature_tensor.cpu().numpy())
 
-def avg_pool(tensor):
-    return torch.mean(tensor, dim=0)
-
 def parallel_save_features(outputs, dest_path, video_id, start_frame_id):
     futures = []
     os.makedirs(dest_path, exist_ok=True)
     with ThreadPoolExecutor(max_workers=8) as executor:
         for j in range(outputs.shape[0]):
-            last_hidden_state = outputs[j]
-            feature_tensor = avg_pool(last_hidden_state)
+            feature_tensor = outputs[j]
             #print(feature_tensor.shape)
             save_name = f"{video_id}_{frame_id_with_padding(start_frame_id + j)}"
             f = executor.submit(save_feature, dest_path, save_name, feature_tensor)
@@ -91,7 +86,8 @@ if __name__ == '__main__':
     VIDEO_ID = args.id
     MODEL = args.model
 
-    model = get_pretrained_model(MODEL)
+    builder = ModelBuilder()
+    model = ModelBuilder().set_model(MODEL).set_pooling('avg').build()
     model = model.to(device)
     input_transform = get_input_transform(MODEL)
 

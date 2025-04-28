@@ -3,7 +3,7 @@ In this file, we want to train the video MAE model for video classification with
 '''
 import torch
 import lightning as L
-from fish_benchmark.models import get_input_transform, MediaClassifier, MediaClassifier 
+from fish_benchmark.models import get_input_transform, MediaClassifier, MediaClassifier, ModelBuilder 
 from fish_benchmark.data.dataset import get_dataset, get_summary
 from fish_benchmark.litmodule import get_lit_module
 from pytorch_lightning.loggers import WandbLogger
@@ -12,6 +12,7 @@ import yaml
 import argparse
 from lightning.pytorch.callbacks import ModelCheckpoint
 import sys
+import os
 from artifact import log_best_model, log_dataset_summary
 
 def get_args():
@@ -63,30 +64,35 @@ if __name__ == '__main__':
         )
         print("Loading data...")
         train_dataset = get_dataset(DATASET, 
-                                    dataset_config[DATASET]['path'], 
+                                    os.path.join(dataset_config[DATASET]['path'], 'train'), 
                                     augs = get_input_transform(PRETRAINED_MODEL) if not dataset_config[DATASET]['preprocessed'] else None, 
-                                    train=True, 
                                     label_type=LABEL_TYPE, 
-                                    model_name=PRETRAINED_MODEL, 
                                     shuffle=SHUFFLE)
         test_dataset = get_dataset(DATASET, 
-                                   dataset_config[DATASET]['path'], 
+                                   os.path.join(dataset_config[DATASET]['path'], 'test'), 
                                    augs = get_input_transform(PRETRAINED_MODEL) if not dataset_config[DATASET]['preprocessed'] else None, 
-                                   train=False, 
                                    label_type=LABEL_TYPE, 
-                                   model_name=PRETRAINED_MODEL, 
                                    shuffle=SHUFFLE)
     
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=7)
         test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=run.config['batch_size'], num_workers=7)
         
-        model = MediaClassifier(
-            num_classes=len(train_dataset.categories), 
-            pretrained_model=PRETRAINED_MODEL,
-            classifier_type=CLASSIFIER, 
-            freeze_pretrained=True,
+        builder = ModelBuilder()
+        model = (
+            builder
+            .set_model(PRETRAINED_MODEL)
+            .set_pooling('mean')
+            .set_classifier(CLASSIFIER, input_dim=builder.get_hidden_size(), output_dim=len(train_dataset.categories))
+            .build()
         )
+
+        # model = MediaClassifier(
+        #     num_classes=len(train_dataset.categories), 
+        #     pretrained_model=PRETRAINED_MODEL,
+        #     classifier_type=CLASSIFIER, 
+        #     freeze_pretrained=True,
+        # )
 
         checkpoint_callback = ModelCheckpoint(
             monitor="val_loss",

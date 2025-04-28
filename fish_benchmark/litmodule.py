@@ -87,6 +87,8 @@ class LitBinaryClassifierModule(L.LightningModule):
 
     def shared_step(self, batch, prefix):
         x, y = batch
+        x = x.float()
+        y = y.float()
         logits = self.model(x)
         # proportion_0 = (y == 0).sum().float() / (y>=0).sum().clamp(min=1)
         # proportion_1 = (y == 1).sum().float() / (y >=0).sum().clamp(min=1)

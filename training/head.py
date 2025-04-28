@@ -3,7 +3,7 @@ In this file, we want to train the video MAE model for video classification with
 '''
 import torch
 import lightning as L
-from fish_benchmark.models import get_input_transform, get_pretrained_model, get_classifier
+from fish_benchmark.models import get_input_transform, get_pretrained_model, ModelBuilder
 from fish_benchmark.data.dataset import get_dataset, get_precomputed_dataset
 from fish_benchmark.litmodule import get_lit_module
 from pytorch_lightning.loggers import WandbLogger
@@ -75,11 +75,11 @@ if __name__ == '__main__':
         # to get hidden size
         pretrained_model = get_pretrained_model(MODEL) 
         hidden_size = pretrained_model.config.hidden_size
-        classifier = get_classifier(
-            input_dim=hidden_size,
-            output_dim=len(train_dataset.categories),
-            type=CLASSIFIER
-        )
+        builder = ModelBuilder()
+        classifier = builder.set_classifier(CLASSIFIER, 
+                                            input_dim=hidden_size, 
+                                            output_dim=len(train_dataset.categories)).build()
+        
         checkpoint_callback = ModelCheckpoint(
             monitor="val_loss",
             save_top_k=1,

@@ -14,6 +14,13 @@ class MeanPooling(nn.Module):
     def forward(self, x):
         return x.mean(dim=self.dim)
     
+class MaxPooling(nn.Module):
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        return x.max(dim=self.dim).values
 
 class MLP(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim=512):
@@ -75,24 +82,13 @@ def get_classifier(input_dim, output_dim, type):
     else:
         raise ValueError(f"Unknown classifier type: {type}")
 
-def get_classifier_with_pooling(input_dim, output_dim, type):
-    if type == 'mlp':
-        return nn.Sequential(
-            MeanPooling(dim = 1), 
-            MLP(input_dim, output_dim)
-        )
-
-    elif type == 'attention':
-        return AttentionBlock(input_dim, output_dim)
-    elif type == 'linear':
-        return nn.Sequential(
-            MeanPooling(dim = 1), 
-            nn.Linear(input_dim, output_dim)
-        )
+def get_pooling(type, dim):
+    if type == 'mean':
+        return MeanPooling(dim=dim)
+    elif type == 'max':
+        return MaxPooling(dim=dim)
     else:
-        raise ValueError(f"Unknown classifier type: {type}")
-    
-
+        raise ValueError(f"Unknown pooling type: {type}")
     
 def get_pretrained_model(model_name):
     if model_name == 'clip':
@@ -116,16 +112,18 @@ def get_input_transform(model_name, do_resize = None):
         transform = lambda img: processor(images=img, return_tensors="pt").pixel_values.squeeze(0)
         return transform
     elif model_name == 'dino':
-        processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
-        transform = lambda img: processor(img, return_tensors="pt").pixel_values.squeeze(0)
-        return transform
+        # processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
+        # transform = lambda img: processor(img, return_tensors="pt").pixel_values.squeeze(0)
+        processor = TorchVisionPreprocessor()
+        return processor
     elif model_name == 'multipatch_dino':
         processor = TorchVisionPreprocessor()
         return processor
     elif model_name == 'videomae':
-        processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
-        transform = lambda video: processor(list(video), return_tensors="pt").pixel_values.squeeze(0)
-        return transform
+        # processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
+        # transform = lambda video: processor(list(video), return_tensors="pt").pixel_values.squeeze(0)
+        processor = TorchVisionPreprocessor()
+        return processor
     elif model_name == 'swinv2':
         image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
         transform = lambda img: image_processor(img.convert("RGB"), return_tensors="pt", do_resize = do_resize).pixel_values.squeeze(0)
@@ -136,7 +134,66 @@ def get_input_transform(model_name, do_resize = None):
         return transform
     else:
         raise ValueError(f"Unknown model name: {model_name}")
+
+
+class BaseModelV2(nn.Module):
+    def __init__(self, backbone, pooling, classifier):
+        super().__init__()
+        self.freeze = True
+        self.backbone = backbone
+        self.pooling = pooling
+        self.classifier = classifier
+    def forward(self, x):
+        x = self.backbone(x)
+        x = self.pooling(x)
+        x = self.classifier(x)
+        return x
+    def set_freeze_pretrained(self, freeze):
+        self.freeze = freeze
+        if freeze:
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+        else:
+            for param in self.backbone.parameters():
+                param.requires_grad = True
+        return self
+
+
+class ModelBuilder():
+    def __init__(self):
+        self.model = None
+        self.pooling = None
+        self.classifier = None
+
+    def get_hidden_size(self):
+        if self.model is None:
+            raise ValueError("Model not set. Please set the model first.")
+        return self.hidden_size
     
+    def set_model(self, model):
+        self.model = model
+        self.hidden_size = get_pretrained_model(model).config.hidden_size
+        return self
+    
+    def set_pooling(self, pooling):
+        self.pooling = pooling
+        return self
+    
+    def set_classifier(self, classifier, input_dim, output_dim):
+        self.classifier = classifier
+        self.classifier_input_dim = input_dim
+        self.classifier_output_dim = output_dim
+        return self
+
+    def build(self):
+        assert self.pooling is None or self.classifier != "attention", "Attention classifier includes pooling"
+        #dimension check
+        if self.classifier and self.model: assert self.classifier_input_dim == self.hidden_size, f"Classifier input dimension {self.classifier_input_dim} does not match model hidden size {self.hidden_size}"
+        MODEL = get_pretrained_model(self.model) if self.model else nn.Identity()
+        POOLING = get_pooling(self.pooling, dim=1) if self.pooling else nn.Identity()
+        CLASSIFIER = get_classifier(self.classifier_input_dim, self.classifier_output_dim, self.classifier) if self.classifier else nn.Identity()
+        return BaseModelV2(MODEL, POOLING, CLASSIFIER)
+
 class MediaClassifier(nn.Module):
     def __init__(self, num_classes, pretrained_model = 'clip', classifier_type='mlp', freeze_pretrained=True):
         super().__init__()

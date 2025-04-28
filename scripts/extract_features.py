@@ -6,7 +6,7 @@ import subprocess
 import argparse
 
 TARGET_MODELS = ['videomae']
-TARGET_DATASETS = ['AbbySlidingWindowPrecomputed']
+TARGET_DATASETS = ['UCF101SlidingWindowPrecomputed', 'AbbySlidingWindowPrecomputed']
 model_config = yaml.safe_load(open("config/models.yml", "r"))
 dataset_config = yaml.safe_load(open("config/datasets.yml", "r"))
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
