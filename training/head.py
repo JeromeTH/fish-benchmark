@@ -14,9 +14,11 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 import sys
 from artifact import log_best_model, log_dataset_summary
 import os
+import json
 # python training/head.py --classifier "mlp" --dataset "MikeFramesPatchedPrecomputed" --model "multipatch_dino" 
 # python training/head.py --classifier "mlp" --dataset "AbbyFramesPrecomputed" --model "dino"
 # python training/head.py --classifier "mlp" --dataset "AbbySlidingWindowPrecomputed" --model "videomae"
+# python training/head.py --classifier "mlp" --dataset "UCF101SlidingWindowPrecomputed" --model "videomae"
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--classifier", required=True)
@@ -42,7 +44,7 @@ if __name__ == '__main__':
     LABEL_TYPE = args.label_type
 
     dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
-    model_config = yaml.safe_load(open('config/models.yml', 'r'))
+    model_config = json.load(open(f'resource/{MODEL}/config.json', 'r'))
     available_gpus = torch.cuda.device_count()
     print(f"Available GPUs: {available_gpus}")
 
@@ -70,11 +72,16 @@ if __name__ == '__main__':
         )
 
         print("Data loaded.")
-        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=run.config['batch_size'], num_workers=7)
+        train_dataloader = torch.utils.data.DataLoader(
+            train_dataset, 
+            batch_size=run.config['batch_size'], 
+            num_workers=7, 
+            shuffle=run.config['shuffle']
+        )
         
         # to get hidden size
-        pretrained_model = get_pretrained_model(MODEL) 
-        hidden_size = pretrained_model.config.hidden_size
+    
+        hidden_size = model_config['hidden_size']
         builder = ModelBuilder()
         classifier = builder.set_classifier(CLASSIFIER, 
                                             input_dim=hidden_size, 
@@ -93,7 +100,7 @@ if __name__ == '__main__':
         print(f"Are we in an interactive terminal? {not tqdm_disable}")
         trainer = L.Trainer(max_epochs=run.config['epochs'], 
                             logger=wandb_logger, 
-                            log_every_n_steps= 10, 
+                            log_every_n_steps= 50, 
                             callbacks=[checkpoint_callback], 
                             val_check_interval=10, 
                             limit_val_batches=1)

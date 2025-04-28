@@ -23,15 +23,26 @@ class MaxPooling(nn.Module):
         return x.max(dim=self.dim).values
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=512):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_layers):
         super().__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        layers = []
+
+        # First layer
+        layers.append(nn.Linear(input_dim, hidden_dim))
+        layers.append(nn.ReLU())
+
+        # Hidden layers
+        for _ in range(num_layers - 2):
+            layers.append(nn.Linear(hidden_dim, hidden_dim))
+            layers.append(nn.ReLU())
+
+        # Final layer
+        layers.append(nn.Linear(hidden_dim, output_dim))
+
+        self.mlp = nn.Sequential(*layers)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
+        return self.mlp(x)
 
 class AttentionBlock(nn.Module):
     def __init__(self, embed_dim, output_dim):
@@ -76,7 +87,7 @@ class BaseModel(nn.Module):
 
 def get_classifier(input_dim, output_dim, type):
     if type == 'mlp':
-        return MLP(input_dim, output_dim)
+        return MLP(input_dim=input_dim, hidden_dim=512, output_dim= output_dim, num_layers=2)
     elif type == 'linear':
         return nn.Linear(input_dim, output_dim)
     else:
@@ -143,7 +154,7 @@ class BaseModelV2(nn.Module):
         self.backbone = backbone
         self.pooling = pooling
         self.classifier = classifier
-        self.set_freeze_pretrained(self, self.freeze)
+        self.set_freeze_pretrained(self.freeze)
         
     def forward(self, x):
         x = self.backbone(x)
