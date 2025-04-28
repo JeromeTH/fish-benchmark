@@ -207,22 +207,6 @@ class ModelBuilder():
         CLASSIFIER = get_classifier(self.classifier_input_dim, self.classifier_output_dim, self.classifier) if self.classifier else nn.Identity()
         return BaseModelV2(MODEL, POOLING, CLASSIFIER)
 
-class MediaClassifier(nn.Module):
-    def __init__(self, num_classes, pretrained_model = 'clip', classifier_type='mlp', freeze_pretrained=True):
-        super().__init__()
-        self.model = get_pretrained_model(pretrained_model) 
-        self.hidden_size = self.model.config.hidden_size
-        self.num_classes = num_classes
-        self.classifier = get_classifier_with_pooling(self.hidden_size, num_classes, classifier_type)
-        if freeze_pretrained:
-            for param in self.model.parameters():
-                param.requires_grad = False
-
-    def forward(self, x):
-        last_hidden_state = self.model(x)
-        x = self.classifier(last_hidden_state)
-        return x
-
 # class VideoClassifier(nn.Module):
 #     def __init__(self, num_classes, pretrained_model = 'videomae', classifier_type='mlp', freeze_pretrained=True):
 #         super().__init__()

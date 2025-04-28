@@ -87,7 +87,7 @@ if __name__ == '__main__':
     MODEL = args.model
 
     builder = ModelBuilder()
-    model = ModelBuilder().set_model(MODEL).set_pooling('avg').build()
+    model = builder.set_model(MODEL).set_pooling('mean').build()
     model = model.to(device)
     input_transform = get_input_transform(MODEL)
 
