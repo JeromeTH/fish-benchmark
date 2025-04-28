@@ -143,6 +143,8 @@ class BaseModelV2(nn.Module):
         self.backbone = backbone
         self.pooling = pooling
         self.classifier = classifier
+        self.set_freeze_pretrained(self, self.freeze)
+        
     def forward(self, x):
         x = self.backbone(x)
         x = self.pooling(x)
