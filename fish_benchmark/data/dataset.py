@@ -453,7 +453,7 @@ class UCF101Source(BaseSource):
         self.annotation_to_label=lambda x: onehot(len(self.categories), [x])
         self.video_paths = sorted(get_files_of_type(self.path, ".avi"))
         self.annotation_paths = sorted(get_files_of_type(self.path, ".txt"))
-        self.video_dict, self.annotation_dict, self.keys = get_dicts_and_common_keys(self.video_paths, self.label_paths)
+        self.video_dict, self.annotation_dict, self.keys = get_dicts_and_common_keys(self.video_paths, self.annotation_paths)
         self.total_frames = self.calculate_total_frames()
 
     def calculate_total_frames(self):
