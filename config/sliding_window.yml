@@ -7,7 +7,7 @@ frames:
   shuffle:  False
   patch_grid_dim: 1 
   temporal_sample_interval: 1
-  MAX_BUFFER_SIZE: 1000
+  MAX_BUFFER_SIZE: 100
 
 sliding_window: 
   window_size: 16 
@@ -15,10 +15,10 @@ sliding_window:
   samples_per_window: 16 
   step_size: 1
   is_image_dataset: False 
-  shuffle:  False
+  shuffle: False
   patch_grid_dim: 1 
   temporal_sample_interval: 1
-  MAX_BUFFER_SIZE: 1000
+  MAX_BUFFER_SIZE: 100
 
 patched: 
   window_size: 1 
@@ -29,4 +29,4 @@ patched:
   shuffle:  False
   patch_grid_dim: 2
   temporal_sample_interval: 1
-  MAX_BUFFER_SIZE: 1000
+  MAX_BUFFER_SIZE: 100
