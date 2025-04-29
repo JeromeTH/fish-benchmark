@@ -44,7 +44,6 @@ if __name__ == '__main__':
     LABEL_TYPE = args.label_type
 
     dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
-    model_config = json.load(open(f'resource/{MODEL}/config.json', 'r'))
     available_gpus = torch.cuda.device_count()
     print(f"Available GPUs: {available_gpus}")
 
@@ -81,7 +80,8 @@ if __name__ == '__main__':
         
         # to get hidden size
     
-        hidden_size = model_config['hidden_size']
+        model = get_pretrained_model(MODEL)
+        hidden_size = model.config.hidden_size
         builder = ModelBuilder()
         classifier = builder.set_classifier(CLASSIFIER, 
                                             input_dim=hidden_size, 

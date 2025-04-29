@@ -94,6 +94,17 @@ UCF101Frames:
   training_project: "UCF101Frames"
   ours: false
 
+UCF101FramesPatched:
+  path: /share/j_sun/jth264/UCF101_subset
+  precomputed_path: /share/j_sun/jth264/precomputed/UCF101_frames_patched
+  label_types: [onehot]
+  type: video
+  training_project: "UCF101FramesPatched"
+  preprocessed: false
+  num_frames: 4
+  ours: false
+
+
 UCF101SlidingWindow:
   path: /share/j_sun/jth264/UCF101_subset
   precomputed_path: /share/j_sun/jth264/precomputed/UCF101_sliding_window
@@ -110,6 +121,15 @@ UCF101FramesPrecomputed:
   type: image
   preprocessed: false
   training_project: "UCF101Frames"
+  ours: false
+
+UCF101FramesPatchedPrecomputed:
+  path: /share/j_sun/jth264/precomputed/UCF101_frames_patched
+  label_types: [onehot]
+  type: video
+  training_project: "UCF101FramesPatched"
+  preprocessed: false
+  num_frames: 4
   ours: false
 
 UCF101SlidingWindowPrecomputed:

@@ -5,8 +5,8 @@ from fish_benchmark.utils import setup_logger
 import subprocess
 import argparse
 
-TARGET_MODELS = ['videomae']
-TARGET_DATASETS = ['UCF101SlidingWindowPrecomputed', 'AbbySlidingWindowPrecomputed']
+TARGET_MODELS = ['multipatch_dino']
+TARGET_DATASETS = ['UCF101FramesPatchedPrecomputed']
 model_config = yaml.safe_load(open("config/models.yml", "r"))
 dataset_config = yaml.safe_load(open("config/datasets.yml", "r"))
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -55,7 +55,9 @@ def main():
             for DATASET in TARGET_DATASETS: 
                 for MODEL in TARGET_MODELS:
                 # check if the model and dataset are compatible
-                    if model_config[MODEL]['type'] != dataset_config[DATASET]['type']: continue
+                    if model_config[MODEL]['type'] != dataset_config[DATASET]['type']: 
+                        print(f"Model {MODEL} and dataset {DATASET} are not compatible")
+                        continue
                     PATH = os.path.join(dataset_config[DATASET]['path'], TYPE)
                     DEST_ROOT = os.path.join(PATH, f'{MODEL}_features')
                     # Load the model

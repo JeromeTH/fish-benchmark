@@ -25,6 +25,8 @@ from collections import deque
 from fish_benchmark.debug import step_timer
 from PIL import Image
 from torchvision.transforms import ToTensor
+from pydantic import BaseModel
+from typing import Callable, Optional, List 
 
 to_tensor = ToTensor()
 PROFILE = False
@@ -182,15 +184,14 @@ def get_sample_indices(lst_len, clip_len, sample_method = "even-spaced"):
     return indices
 
 @dataclass
-class BaseSlidingWindowDataset:
+class BaseSlidingWindowDataset(IterableDataset):
     '''
     Base Class for sliding through a video and getting a window of frames. Defines sampling, patching, and shuffling.
     The returned dataset would have items of size [samples_per_window * patch_per_sample, channels, height, width]
     The total number of items is (num_frames - window_size) // step_size
     The labels are one-hot encoded.
     '''
-    input_transform: callable=None, 
-    annotation_to_label: callable=None,
+    input_transform: Callable=None, 
     label_type: str= "onehot", 
     window_size: int=16, 
     tolerance_region: int = 16, 
@@ -202,6 +203,7 @@ class BaseSlidingWindowDataset:
     patch_grid_dim: int = 1, 
     temporal_sample_interval: int = 1,
     MAX_BUFFER_SIZE: int = 1000
+    total_frames: int = None
     def __post_init__(self):
         assert self.window_size % self.samples_per_window == 0, f"window_size {self.window_size} should be a factor of samples_per_window {self.samples_per_window}"
         assert self.temporal_sample_interval > 0, f"temporal_sample_interval {self.temporal_sample_interval} should be greater than 0"
@@ -212,13 +214,20 @@ class BaseSlidingWindowDataset:
         assert self.MAX_BUFFER_SIZE > self.window_size, f"MAX_BUFFER_SIZE {self.MAX_BUFFER_SIZE} should be greater than window_size {self.window_size}, otherwise it will not be able to store enough frames"
         if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
         self.image_window_queue = deque([], maxlen=self.window_size)
-        self.annotations_window_queue = deque([], maxlen=self.window_size)
+        self.labels_window_queue = deque([], maxlen=self.window_size)
         self.clips = []
         self.labels = []
+        self.source = None
+
+    def set_source(self, source: Iterator):
+        self.source = source
+
+    def __len__(self):
+        return self.downsampled_length(self.total_frames) if self.total_frames else None
 
     def clear_window_queue(self):
         self.image_window_queue = deque([], maxlen=self.window_size)
-        self.annotations_window_queue = deque([], maxlen=self.window_size)
+        self.labels_window_queue = deque([], maxlen=self.window_size)
 
     def clear_buffer(self):
         self.clips = []
@@ -248,7 +257,7 @@ class BaseSlidingWindowDataset:
         nearest_kth_yield = ceil((idx - (self.window_size - 1)) / self.step_size) #0 indexed 
         return nearest_kth_yield * self.step_size + (self.window_size - 1)
 
-    def handle_item(self, ith_sample, image, annotation):
+    def handle_item(self, ith_sample, image, label):
         '''
         depending on the context of the current seen images, this may return a clip or None
         '''
@@ -260,7 +269,7 @@ class BaseSlidingWindowDataset:
         with step_timer("converting PIL image to numpy", verbose=PROFILE): 
             #images are converted to tensors from the start as we want to treat clip processing as batch processing using torch.stack
             self.image_window_queue.append(np.array(image.convert('RGB')))
-            self.annotations_window_queue.append(annotation)
+            self.labels_window_queue.append(label)
     
         if self.is_yielding_idx(ith_sample):
             #if the calculation of yielding index is correct, then we should have enough images in the window queue
@@ -275,10 +284,9 @@ class BaseSlidingWindowDataset:
             
 
     def get_latest_label(self):
-        last_idx = len(self.annotations_window_queue) - 1
+        last_idx = len(self.labels_window_queue) - 1
         mid_idx = last_idx - int(self.window_size/2)
-        relevant_annotations = list(self.annotations_window_queue)[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]
-        relevant_labels = torch.stack([self.annotation_to_label(annotation) for annotation in relevant_annotations]) 
+        relevant_labels = torch.stack(list(self.labels_window_queue)[mid_idx - self.tolerance_region: mid_idx + self.tolerance_region + 1]) 
         relevant_labels = relevant_labels[:, :len(self.categories)] #drop extra incomplete labels
         unioned_labels = torch.any(relevant_labels.bool(), dim=0)
         return unioned_labels
@@ -326,6 +334,8 @@ class BaseSlidingWindowDataset:
             tensor_clip = self.numpy_to_tensor(clip)
         with step_timer("applying vision transform", verbose=PROFILE):
             if self.input_transform:
+                print("input_transform")
+                print(self.input_transform)
                 tensor_clip = self.input_transform(tensor_clip)
 
         if self.is_image_dataset: tensor_clip = tensor_clip.squeeze()
@@ -335,14 +345,14 @@ class BaseSlidingWindowDataset:
         '''
         annotated_video_frames is a generator that yields (image, annotation) tuples
         image is a PIL image
-        annotation is whatever the dataset annotation. One needs to implement the annotation_to_label function to convert it to a label
+        label is whatever the dataset label. One needs to implement the annotation_to_label function to convert it to a label
         '''
         self.clear_buffer()
         self.clear_window_queue()
-        for i, (image, annotation) in enumerate(annotated_video_frames):
+        for i, (image, label) in enumerate(annotated_video_frames):
             if i % self.temporal_sample_interval == 0: 
                 sample_idx = i // self.temporal_sample_interval
-                yield from self.handle_item(sample_idx, image, annotation)
+                yield from self.handle_item(sample_idx, image, label)
 
     def downsampled_length(self, video_frames_count):
         '''
@@ -353,121 +363,78 @@ class BaseSlidingWindowDataset:
         items_count = max(0, (sampled_frames - self.window_size) // self.step_size)
         return items_count
 
+    def __iter__(self):
+        assert self.source is not None, "source is not set. Please set the source using set_source()"
+        yield from self.scan(self.source)
+        yield from self.flush()
         
-class MikeDataset(IterableDataset, BaseSlidingWindowDataset):
-    def __init__(self, 
-                 path, 
-                 transform=None, 
-                 label_type = "onehot", 
-                 window_size=16, 
-                 tolerance_region = 16, 
-                 samples_per_window = 16, 
-                 step_size = 1, 
-                 is_image_dataset = False, 
-                 shuffle = False, 
-                 patch_grid_dim = 2, 
-                 temporal_sample_interval = 2):
+class BaseSource:
+    def get_config(self):
+        required_attrs = ['categories', 'label_type', 'total_frames']
+        for attr in required_attrs:
+            if not hasattr(self, attr):
+                raise AttributeError(f"Missing required attribute '{attr}' in {self.__class__.__name__}")
+        return {
+            'categories': self.categories,
+            'label_type': self.label_type,
+            'total_frames': self.total_frames
+        }
+    
+class MikeSource(BaseSource):
+    def __init__(self, path):
         self.path = path
         self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
-        self.SHARD_SIZE = 1000
-        BaseSlidingWindowDataset.__init__(
-            self,
-            input_transform=transform,
-            annotation_to_label=lambda x: onehot(len(self.categories), [self.behavior_idx_map[behavior] for behavior in parse_annotation(x)]),
-            label_type=label_type,
-            window_size=window_size,
-            tolerance_region=tolerance_region,
-            samples_per_window=samples_per_window,
-            step_size=step_size,
-            categories=list(self.behavior_idx_map.keys()), 
-            is_image_dataset=is_image_dataset,
-            shuffle=shuffle,
-            patch_grid_dim=patch_grid_dim, 
-            temporal_sample_interval=temporal_sample_interval,
-            MAX_BUFFER_SIZE = 100//window_size
-        )
-
-    def video_frames_shard_count_pairs(self):
-        tar_file_paths = get_files_of_type(self.path, ".tar")
-        video_frames = wds.WebDataset(tar_file_paths, shardshuffle=False).decode("pil").to_tuple("png", "json")
-        return video_frames, len(tar_file_paths)
-
-    def __len__(self):
-        _, shard_count = self.video_frames_shard_count_pairs()
-        video_frames_count = shard_count * self.SHARD_SIZE
-        count = self.downsampled_length(video_frames_count)
-        return count
+        self.categories = list(self.behavior_idx_map.keys())
+        self.label_type = "onehot"
+        self.annotation_to_label = lambda x: onehot(len(self.behavior_idx_map), [self.behavior_idx_map[behavior] for behavior in parse_annotation(x)])
+        self.SHARD_SIZE = 1000  
+        self.tar_file_paths = get_files_of_type(self.path, ".tar")
+        self.source = wds.WebDataset(self.tar_file_paths, shardshuffle=False).decode("pil").to_tuple("png", "json")
+        self.total_frames = self.SHARD_SIZE * len(self.tar_file_paths)
 
     def __iter__(self):
-        video_frames, _ =  self.video_frames_shard_count_pairs()
-        yield from self.scan(video_frames)
-        yield from self.flush()
+        for frame, annotation in self.source: 
+            yield frame, self.annotation_to_label(annotation)
 
-class AbbyDataset(IterableDataset, BaseSlidingWindowDataset):
-    def __init__(self, 
-                 path, 
-                 transform=None, 
-                 label_type = "onehot", 
-                 window_size=16, 
-                 tolerance_region = 16, 
-                 samples_per_window = 16, 
-                 step_size = 1, 
-                 is_image_dataset = False, 
-                 shuffle = False, 
-                 patch_grid_dim = 1,
-                 temporal_sample_interval = 1):
+
+class AbbySource(BaseSource):
+    def __init__(self, path):
         self.path = path
         self.categories = load_from_cur_dir('abby_dset_categories.json')
-        BaseSlidingWindowDataset.__init__(
-            self,
-            input_transform=transform,
-            annotation_to_label=lambda x: torch.tensor(x), 
-            #label shouuld be a torch tensor of shape (num_classes,)
-            label_type=label_type,
-            window_size=window_size,
-            tolerance_region=tolerance_region,
-            samples_per_window=samples_per_window,
-            step_size=step_size,
-            categories=self.categories,    
-            is_image_dataset=is_image_dataset, 
-            shuffle=shuffle, 
-            patch_grid_dim=patch_grid_dim,
-            temporal_sample_interval=temporal_sample_interval,
-            MAX_BUFFER_SIZE = 1000//window_size #can have more b/c resolution is lower
-        )
-
-    def container_label_pairs(self):
-        track_paths = sorted(get_files_of_type(self.path, ".mp4"))
-        label_paths = sorted(get_files_of_type(self.path, ".txt"))
-        label_dict = {
+        self.label_type = "onehot"
+        self.annotation_to_label = lambda x: torch.tensor(x)
+        self.track_paths = sorted(get_files_of_type(self.path, ".mp4"))
+        self.label_paths = sorted(get_files_of_type(self.path, ".txt"))
+        self.label_dict = {
             os.path.splitext(os.path.basename(p))[0]: p
-            for p in label_paths
+            for p in self.label_paths
         }
-        for track_path in track_paths:
+        self.total_frames = self.calculate_total_frames()
+
+    def calculate_total_frames(self):
+        total_frames = 0
+        for track_path in self.track_paths:
             track_name = os.path.splitext(os.path.basename(track_path))[0]
-            label_path = label_dict.get(track_name)
+            label_path = self.label_dict.get(track_name)
+            if label_path is None:
+                continue
+            
+            container = av.open(track_path)
+            total_frames += container.streams.video[0].frames
+        return total_frames
+    
+    def __iter__(self):
+        for track_path in self.track_paths:
+            track_name = os.path.splitext(os.path.basename(track_path))[0]
+            label_path = self.label_dict.get(track_name)
             if label_path is None:
                 continue
             
             container = av.open(track_path)
             label = np.loadtxt(label_path, delimiter='\t', dtype=int)
             assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
-            yield container, label
-
-    def __len__(self):
-        total_frames = 0
-        for container, label in self.container_label_pairs():
-            total_frames += self.downsampled_length(container.streams.video[0].frames) 
-        return total_frames
-
-    def __iter__(self):
-        for container, label in self.container_label_pairs():
-            def annotated_frame_iterator():
-                for i, frame in enumerate(container.decode(video=0)):
-                    yield frame.to_image(), label[i]
-
-            yield from self.scan(annotated_frame_iterator())
-            yield from self.flush()
+            for i, frame in enumerate(container.decode(video=0)):
+                yield frame.to_image(), self.annotation_to_label(label[i])
 
 def get_dicts_and_common_keys(list1, list2):
     '''
@@ -478,95 +445,104 @@ def get_dicts_and_common_keys(list1, list2):
     common_keys = list(dict1.keys() & dict2.keys())
     return dict1, dict2, common_keys
 
-class UCF101V2(BaseSlidingWindowDataset):
-    def __init__(self, path, 
-                 transform=None, 
-                 label_type = "categorical", 
-                 window_size=16, 
-                 tolerance_region = 7, 
-                 samples_per_window = 16, 
-                 step_size = 1, 
-                 is_image_dataset = False, 
-                 shuffle = False, 
-                 patch_grid_dim = 1):
+class UCF101Source(BaseSource):
+    def __init__(self, path):
         self.path = path
         self.categories = load_from_cur_dir('ucf101_categories.json')
-        BaseSlidingWindowDataset.__init__(
-            self,
-            input_transform=transform,
-            annotation_to_label=lambda x: onehot(len(self.categories), [x]),
-            label_type=label_type,
-            window_size=window_size,
-            tolerance_region=tolerance_region,
-            samples_per_window=samples_per_window,
-            step_size=step_size,
-            categories=self.categories,    
-            is_image_dataset=is_image_dataset, 
-            shuffle=shuffle, 
-            patch_grid_dim=patch_grid_dim, 
-            temporal_sample_interval=1,
+        self.label_type = "onehot"  
+        self.annotation_to_label=lambda x: onehot(len(self.categories), [x])
+        self.video_paths = sorted(get_files_of_type(self.path, ".avi"))
+        self.annotation_paths = sorted(get_files_of_type(self.path, ".txt"))
+        self.video_dict, self.annotation_dict, self.keys = get_dicts_and_common_keys(self.video_paths, self.label_paths)
+        self.total_frames = self.calculate_total_frames()
+
+    def calculate_total_frames(self):
+        total_frames = 0
+        for key in self.keys:
+            video_path = self.video_dict[key]
+            container = av.open(video_path)
+            total_frames += container.streams.video[0].frames
+        return total_frames
+    
+    def get_config(self):
+        return DatasetConfig(
+            categories=self.categories,
+            input_transform=None,
+            label_type=self.label_type
         )
 
-    def __len__(self):
-        count = 0
-        for video_path in get_files_of_type(self.path, ".avi"):
+    def __iter__(self):
+        for key in self.keys:
+            video_path = self.video_dict[key]
+            annotation_path = self.annotation_dict[key]
+            with open(annotation_path, 'r') as f:
+                annotation_idx = int(f.read().strip())
             container = av.open(video_path)
-            video_frames_count = container.streams.video[0].frames
-            count += self.downsampled_length(video_frames_count)
-        return count
+            for i, frame in enumerate(container.decode(video=0)):
+                yield frame.to_image(), self.annotation_to_label(annotation_idx)
+
+def get_source(path, dataset_name):
+    if dataset_name == 'ucf101':
+        return UCF101Source(path)
+    elif dataset_name == 'mike':
+        return MikeSource(path)
+    elif dataset_name == 'abby':
+        return AbbySource(path)
     
-    def frame_annotation_pairs(self, video_path, label_idx):
-        #read video using av
-        container = av.open(video_path)
-        for i, frame in enumerate(container.decode(video=0)):
-            yield frame.to_image(), label_idx
+class SlidingWindowConfig(BaseModel):
+    window_size: int
+    tolerance_region: int 
+    samples_per_window: int
+    step_size: int
+    is_image_dataset: bool  
+    shuffle:  bool
+    patch_grid_dim: int
+    temporal_sample_interval: int
+    MAX_BUFFER_SIZE: int
 
-    def __iter__(self):
-        video_paths = sorted(get_files_of_type(self.path, ".avi"))
-        label_paths = sorted(get_files_of_type(self.path, ".txt"))
-        video_dict, label_dict, keys = get_dicts_and_common_keys(video_paths, label_paths)
-        for key in keys:
-            video_path = video_dict[key]
-            label_path = label_dict[key]
-            with open(label_path, 'r') as f:
-                label_idx = int(f.read().strip())
-            yield from self.scan(self.frame_annotation_pairs(video_path, label_idx))
-            yield from self.flush()
+class DatasetConfig(BaseModel):
+    categories: list
+    total_frames: int
+    label_type: str
 
-
-class PrecomputedDataset(IterableDataset):
-    def __init__(self, path, categories, transform=None):
-        '''
-        path should be contain 2 subfolders: frames and labels
-        '''
-        self.label_type = "onehot"
+class DatasetBuilder():
+    def __init__(self, path, dataset_name, style):
+        assert dataset_name in ['ucf101', 'mike', 'abby'], f"dataset_name {dataset_name} not supported"
+        assert style in ['sliding_window', 'frames', 'patched'], f"style {style} not supported"        
         self.path = path
-        self.transform = transform
-        self.categories = categories
+        self.set_sliding_window_config(yaml.safe_load(open("config/sliding_window.yml", "r"))[style])
+        self.source = get_source(path, dataset_name)
+        self.set_dataset_config(self.source.get_config())
+        self.input_transform = None
 
-    def __len__(self):
-        frames_path = os.path.join(self.path, "frames")
-        frame_files = os.listdir(frames_path)
-        return len(frame_files)
-    
-    def __iter__(self):
-        '''
-        frames/ contains the precomputed frames with <id>.pt
-        labels/ contains the precomputed labels with <id>.pt
-        '''
-        frames_path = os.path.join(self.path, "frames")
-        labels_path = os.path.join(self.path, "labels")
-        frame_files = os.listdir(frames_path)
-        for id in range(len(frame_files)):
-            frame_path = os.path.join(frames_path, f'{id}.pt')
-            label_path = os.path.join(labels_path, f'{id}.pt')
-            if not os.path.isfile(frame_path): continue
-            if not os.path.isfile(label_path): continue
-            frame = torch.load(frame_path)
-            label = torch.load(label_path)
-            if self.transform:
-                frame = self.transform(frame)
-            yield frame, label
+    def set_sliding_window_config(self, config_dict):
+        self.swconfig = SlidingWindowConfig(**config_dict)
+
+    def set_input_transform(self, transform):
+        self.input_transform = transform
+
+    def set_dataset_config(self, config_dict):
+        self.dsconfig = DatasetConfig(**config_dict)
+
+    def set_dsconfig_attr(self, attr_name, value):
+        if not hasattr(self.dsconfig, attr_name):
+            raise AttributeError(f"Config has no attribute '{attr_name}'")
+        setattr(self.dsconfig, attr_name, value)
+
+    def set_swconfig_attr(self, attr_name, value):
+        if not hasattr(self.swconfig, attr_name):
+            raise AttributeError(f"Config has no attribute '{attr_name}'")
+        setattr(self.swconfig, attr_name, value)
+
+    def build(self):
+        config = {
+            **self.swconfig.model_dump(), 
+            **self.dsconfig.model_dump(), 
+            'input_transform': self.input_transform,
+        }
+        dataset = BaseSlidingWindowDataset(**config)
+        dataset.set_source(self.source)
+        return dataset
 
 class PrecomputedDatasetV2(Dataset):
     '''
@@ -619,115 +595,21 @@ def get_dataset(dataset_name, path, augs=None, label_type = "onehot", shuffle = 
     elif dataset_name == 'Caltech101':
         dataset = CalTech101WithSplit(path, transform=augs, label_type=label_type)
     elif dataset_name == 'MikeFrames':
-        # dataset = Mike(path, transform=augs, label_type=label_type, train=train)
-        dataset = MikeDataset(
-            path,
-            transform=augs,
-            label_type=label_type,
-            window_size = 1, 
-            tolerance_region = 0,
-            samples_per_window = 1,
-            step_size = 10, 
-            is_image_dataset=True, 
-            shuffle = shuffle, 
-            patch_grid_dim=1, 
-            temporal_sample_interval=1
-        )
+        dataset = DatasetBuilder(path, "mike", "frames").build()
     elif dataset_name == 'MikeFramesPatched':
-        # dataset = Mike(path, transform=augs, label_type=label_type, train=train)
-        dataset = MikeDataset(
-            path,
-            transform=augs,
-            label_type=label_type,
-            window_size = 1, 
-            tolerance_region = 0,
-            samples_per_window = 1,
-            step_size = 1, 
-            is_image_dataset=False, 
-            shuffle = shuffle, 
-            patch_grid_dim=2, 
-            temporal_sample_interval=1
-        )
+        dataset = DatasetBuilder(path, "mike", "patched").build()
     elif dataset_name == 'MikeSlidingWindow':
-        # dataset = MikeSlidingWindow(path, transform=augs, label_type=label_type, train=train)
-        dataset = MikeDataset(
-            path, 
-            transform=augs,
-            label_type=label_type,
-            window_size = 16,
-            tolerance_region = 7,
-            samples_per_window = 16,
-            step_size = 1, 
-            is_image_dataset=False, 
-            shuffle = shuffle,
-            patch_grid_dim=1, 
-            temporal_sample_interval=1
-        )
+        dataset = DatasetBuilder(path, "mike", "sliding_window").build()
     elif dataset_name == 'AbbyFrames':
-        dataset = AbbyDataset(
-            path, 
-            transform=augs, 
-            label_type=label_type, 
-            window_size=1, 
-            tolerance_region = 0,
-            samples_per_window = 1,
-            step_size=1, 
-            is_image_dataset=True, 
-            shuffle = shuffle, 
-            temporal_sample_interval=2
-        )
+        dataset = DatasetBuilder(path, "abby", "frames").build()
     elif dataset_name == 'AbbySlidingWindow':
-        dataset = AbbyDataset(
-            path, 
-            transform=augs, 
-            label_type=label_type, 
-            window_size=16, 
-            tolerance_region = 7,
-            samples_per_window = 16,
-            step_size=1, 
-            is_image_dataset=False, 
-            shuffle = shuffle, 
-            temporal_sample_interval=2
-        )
+        dataset = DatasetBuilder(path, "abby", "sliding_window").build()
     elif dataset_name == 'UCF101Frames':
-        dataset = UCF101V2(
-            path, 
-            transform=augs, 
-            label_type=label_type, 
-            window_size=1, 
-            tolerance_region = 0, 
-            samples_per_window=1, 
-            step_size=1, 
-            is_image_dataset=True, 
-            shuffle = shuffle, 
-        )
+        dataset = DatasetBuilder(path, "ucf101", "frames").build()
     elif dataset_name == 'UCF101SlidingWindow':
-        dataset = UCF101V2(
-            path, 
-            transform=augs, 
-            label_type=label_type, 
-            window_size=16, 
-            tolerance_region = 7,
-            samples_per_window=16, 
-            step_size=1, 
-            is_image_dataset=False, 
-            shuffle = shuffle, 
-        )
-    elif dataset_name == 'MikePrecomputed': 
-        behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
-        categories = list(behavior_idx_map.keys())
-        dataset = PrecomputedDataset(path, categories=categories, transform=augs)
-    elif dataset_name == 'MikeFramesPatchedPrecomputed':
-        behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
-        categories = list(behavior_idx_map.keys())
-        dataset = PrecomputedDatasetV2(path, categories=categories, transform=augs)
-    elif dataset_name == 'MikeSlidingWindowPrecomputed':
-        behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
-        categories = list(behavior_idx_map.keys())
-        dataset = PrecomputedDataset(path, categories=categories, transform=augs)
-    elif dataset_name == 'AbbySlidingWindowPrecomputed':
-        categories = load_from_cur_dir('abby_dset_categories.json')
-        dataset = PrecomputedDataset(path, categories=categories, transform=augs)
+        dataset = DatasetBuilder(path, "ucf101", "sliding_window").build()
+    elif dataset_name == 'UCF101FramesPatched':
+        dataset = DatasetBuilder(path, "ucf101", "patched").build()
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
     return dataset
@@ -752,6 +634,10 @@ def get_precomputed_dataset(name, path, augs=None, stage = "features", label_typ
                                        label_path = os.path.join(path, 'labels'),
                                     categories=load_from_cur_dir('ucf101_categories.json'), transform=augs)
     elif name == 'UCF101SlidingWindowPrecomputed':
+        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
+                                       label_path = os.path.join(path, 'labels'),
+                                    categories=load_from_cur_dir('ucf101_categories.json'), transform=augs)
+    elif name == 'UCF101FramesPatchedPrecomputed':
         dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
                                        label_path = os.path.join(path, 'labels'),
                                     categories=load_from_cur_dir('ucf101_categories.json'), transform=augs)
