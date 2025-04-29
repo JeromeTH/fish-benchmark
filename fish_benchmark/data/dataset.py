@@ -463,13 +463,6 @@ class UCF101Source(BaseSource):
             container = av.open(video_path)
             total_frames += container.streams.video[0].frames
         return total_frames
-    
-    def get_config(self):
-        return DatasetConfig(
-            categories=self.categories,
-            input_transform=None,
-            label_type=self.label_type
-        )
 
     def __iter__(self):
         for key in self.keys:
