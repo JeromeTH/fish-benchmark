@@ -16,7 +16,7 @@ if __name__ == '__main__':
     DATASET = args.dataset
     MODEL = args.model #nullable
     config = yaml.safe_load(open("config/datasets.yml", "r"))
-    input_transform = get_input_transform(MODEL) if MODEL else None
+    input_transform = None
     dataset = get_dataset(
         DATASET, 
         path = config[DATASET]['path'] + '/train', 

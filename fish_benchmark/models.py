@@ -161,6 +161,7 @@ class BaseModelV2(nn.Module):
         x = self.pooling(x)
         x = self.classifier(x)
         return x
+    
     def set_freeze_pretrained(self, freeze):
         self.freeze = freeze
         if freeze:
