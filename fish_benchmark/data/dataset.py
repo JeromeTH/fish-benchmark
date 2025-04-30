@@ -220,6 +220,10 @@ class BaseSlidingWindowDataset(IterableDataset):
         self.source = None
 
     def set_source(self, source: Iterator):
+        '''
+        Source iterator should yield (image, label) tuples with images being PIL images and label 
+        being a pytorch tensor of shape (num_classes,)
+        '''
         self.source = source
 
     def __len__(self):
@@ -295,7 +299,6 @@ class BaseSlidingWindowDataset(IterableDataset):
         '''
         Given an image, return a list of patches based on the grid size.
         img is a numpy array of shape (H, W, C)
-        
         '''
         H, W = img.shape[:2]
 
@@ -367,6 +370,17 @@ class BaseSlidingWindowDataset(IterableDataset):
         assert self.source is not None, "source is not set. Please set the source using set_source()"
         yield from self.scan(self.source)
         yield from self.flush()
+
+    def get_summary(self):
+        summary = {}
+        summary['metadata'] = asdict(self)
+        label_count = torch.zeros(len(self.categories))
+        for _, label in tqdm(self.source): 
+            assert label.shape == (len(self.categories),), f"label shape {label.shape} does not match categories {self.categories}"
+            label_count += label
+        summary['label_count'] = label_count.tolist()
+        summary['dataset_size'] = len(self)
+        return summary
         
 class BaseSource:
     def get_config(self):
@@ -569,18 +583,24 @@ class PrecomputedDatasetV2(Dataset):
         if self.transform:
             clip = self.transform(clip)
         return clip, label
-    
 
-def get_summary(dataset):
-    summary = {}
-    summary['metadata'] = asdict(dataset)
-    labels = torch.stack([
-        label for _, label in tqdm(islice(dataset, 100))
-    ])
-    label_density = labels.sum(dim=0) / labels.shape[0]
-    summary['label_density'] = label_density.tolist()
-    summary['dataset_size'] = len(dataset)
-    return summary
+    def get_summary(self):
+        summary = {}
+        summary['metadata'] = {
+            'input_path': self.input_path,
+            'label_path': self.label_path,
+            'categories': self.categories,
+            'label_type': self.label_type
+        }
+        label_count = torch.zeros(len(self.categories))
+        for key in self.keys:
+            label = torch.from_numpy(np.load(self.label_dict[key]))
+            assert label.shape == (len(self.categories),), f"label shape {label.shape} does not match categories {self.categories}"
+            label_count += label
+    
+        summary['label_count'] = label_count.tolist()
+        summary['dataset_size'] = len(self)
+        return summary
 
 def get_dataset_builder(dataset_name, path, augs=None, label_type = "onehot", shuffle = False):
     if dataset_name == 'MikeFrames':

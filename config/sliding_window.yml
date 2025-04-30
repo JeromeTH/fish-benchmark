@@ -22,7 +22,7 @@ sliding_window:
 
 patched: 
   window_size: 1 
-  tolerance_region: 1 
+  tolerance_region: 0
   samples_per_window: 1 
   step_size: 30
   is_image_dataset: False 

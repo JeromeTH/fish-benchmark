@@ -4,7 +4,7 @@ import yaml
 from fish_benchmark.utils import setup_logger
 
 # Example config values (replace with loading from a file if needed)
-TARGETS = ["MikeFrames", "MikeSlidingWindow", "MikeFramesPatched"]
+TARGETS = ["MikeFramesPatched"]
 PARALLEL = True
 
 config = yaml.safe_load(open("config/datasets.yml", "r"))
