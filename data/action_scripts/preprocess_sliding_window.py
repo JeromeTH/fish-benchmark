@@ -2,10 +2,12 @@ import argparse
 import os
 import yaml
 import torch
-from fish_benchmark.data.dataset import get_dataset
+from fish_benchmark.data.dataset import get_dataset_builder
 from fish_benchmark.utils import frame_id_with_padding, setup_logger
 from tqdm import tqdm
 import numpy as np
+import shutil
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -14,6 +16,7 @@ def get_args():
     parser.add_argument("--label_dest", required=True)
     parser.add_argument("--id", required=True)
     parser.add_argument("--dataset", required=True)
+    parser.add_argument("--type", default="train")
     return parser.parse_args()
 
 logger = setup_logger(
@@ -37,12 +40,20 @@ if __name__ == '__main__':
     if DATASET not in dataset_config:
         raise ValueError(f"The specified dataset is not valid: {DATASET}")
     
-    dataset = get_dataset(
+    builder = get_dataset_builder(
         DATASET, 
         path=SOURCE, 
         augs=None,
         shuffle=False
     )
+    dataset = builder.build()
+
+    # Delete old folders if they exist
+    for path in [INPUT_DEST, LABEL_DEST]:
+        if os.path.exists(path):
+            logger.warning(f"Deleting existing destination folder: {path}")
+            shutil.rmtree(path)
+            
     os.makedirs(INPUT_DEST, exist_ok=True)
     os.makedirs(LABEL_DEST, exist_ok=True)
     logger.info(f"Saving input to {INPUT_DEST}, label to {LABEL_DEST}")

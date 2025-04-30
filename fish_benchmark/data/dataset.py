@@ -582,30 +582,25 @@ def get_summary(dataset):
     summary['dataset_size'] = len(dataset)
     return summary
 
-def get_dataset(dataset_name, path, augs=None, label_type = "onehot", shuffle = False):
-    if dataset_name == 'UCF101':
-        dataset = UCF101(path, transform=augs, label_type=label_type)
-    elif dataset_name == 'Caltech101':
-        dataset = CalTech101WithSplit(path, transform=augs, label_type=label_type)
-    elif dataset_name == 'MikeFrames':
-        dataset = DatasetBuilder(path, "mike", "frames").build()
+def get_dataset_builder(dataset_name, path, augs=None, label_type = "onehot", shuffle = False):
+    if dataset_name == 'MikeFrames':
+        return DatasetBuilder(path, "mike", "frames")
     elif dataset_name == 'MikeFramesPatched':
-        dataset = DatasetBuilder(path, "mike", "patched").build()
+        return DatasetBuilder(path, "mike", "patched")
     elif dataset_name == 'MikeSlidingWindow':
-        dataset = DatasetBuilder(path, "mike", "sliding_window").build()
+        return DatasetBuilder(path, "mike", "sliding_window")
     elif dataset_name == 'AbbyFrames':
-        dataset = DatasetBuilder(path, "abby", "frames").build()
+        return DatasetBuilder(path, "abby", "frames")
     elif dataset_name == 'AbbySlidingWindow':
-        dataset = DatasetBuilder(path, "abby", "sliding_window").build()
+        return DatasetBuilder(path, "abby", "sliding_window")
     elif dataset_name == 'UCF101Frames':
-        dataset = DatasetBuilder(path, "ucf101", "frames").build()
+        return DatasetBuilder(path, "ucf101", "frames")
     elif dataset_name == 'UCF101SlidingWindow':
-        dataset = DatasetBuilder(path, "ucf101", "sliding_window").build()
+        return DatasetBuilder(path, "ucf101", "sliding_window")
     elif dataset_name == 'UCF101FramesPatched':
-        dataset = DatasetBuilder(path, "ucf101", "patched").build()
+        return DatasetBuilder(path, "ucf101", "patched")
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized.")
-    return dataset
 
 
 def get_precomputed_dataset(name, path, augs=None, stage = "features", label_type = "onehot", shuffle = False):

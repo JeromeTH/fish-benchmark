@@ -2,7 +2,7 @@ frames:
   window_size: 1 
   tolerance_region: 0 
   samples_per_window: 1 
-  step_size: 1
+  step_size: 30
   is_image_dataset: True 
   shuffle:  False
   patch_grid_dim: 1 
@@ -13,7 +13,7 @@ sliding_window:
   window_size: 16 
   tolerance_region: 7
   samples_per_window: 16 
-  step_size: 1
+  step_size: 30
   is_image_dataset: False 
   shuffle: False
   patch_grid_dim: 1 
@@ -24,7 +24,7 @@ patched:
   window_size: 1 
   tolerance_region: 1 
   samples_per_window: 1 
-  step_size: 1
+  step_size: 30
   is_image_dataset: False 
   shuffle:  False
   patch_grid_dim: 2
