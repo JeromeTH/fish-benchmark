@@ -5,7 +5,7 @@ from dataclasses import asdict
 import torch
 from itertools import islice
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
-SPECIFIC_DATASETS = ['UCF101Frames']
+SPECIFIC_DATASETS = ['MikeFramesPatchedPrecomputed']
 if __name__ == '__main__':
     for dataset_name in dataset_config:
         print(dataset_name)
@@ -18,6 +18,4 @@ if __name__ == '__main__':
                               augs=None, 
                               label_type='onehot', 
                               shuffle=True)
-        summary = get_summary(dataset)
-        with open(f'data/summary_statistics/{dataset_name}_summary.yaml', 'w') as f:
-            yaml.dump(summary, f)
+        print()

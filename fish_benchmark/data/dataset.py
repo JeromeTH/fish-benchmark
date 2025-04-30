@@ -603,7 +603,7 @@ def get_dataset_builder(dataset_name, path, augs=None, label_type = "onehot", sh
         raise ValueError(f"Dataset {dataset_name} not recognized.")
 
 
-def get_precomputed_dataset(name, path, augs=None, stage = "features", label_type = "onehot", shuffle = False):
+def (name, path, augs=None, stage = "features", label_type = "onehot", shuffle = False):
     assert stage in ["multipatch_dino_features", "inputs", "dino_features", "videomae_features"], f"stage {stage} not recognized. Should be features or inputs"
     if name == 'MikeFramesPatchedPrecomputed':
         dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
