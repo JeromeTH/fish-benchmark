@@ -23,7 +23,7 @@ import logging
 
 DATA_PATH = "/share/j_sun/jth264/bites_training_data"
 PREDEFINED_TARGET_IDS = 'missing_annotations.txt'
-OUTPUT_PATH = "/share/j_sun/jth264/bites_frame_annotation"
+OUTPUT_PATH = "/share/j_sun/jth264/mikev2"
 SHARD_SIZE = 1000
 
 if not os.path.exists(OUTPUT_PATH):

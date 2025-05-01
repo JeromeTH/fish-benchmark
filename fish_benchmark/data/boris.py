@@ -7,6 +7,7 @@ import os
 import numpy as np
 from fish_benchmark.utils import PriorityQueue
 from fish_benchmark.data.schemas import Behavior, Event, Metadata
+from fish_benchmark.data.dataset import onehot, load_from_cur_dir
 
 METADATA_TO_BORIS_NAME = {
     'observation_id': ['observation_id'],
@@ -80,6 +81,7 @@ class BorisAnnotation:
         self.df = read_df(self.annotation_path)
         self.metadata: Metadata = get_metadata(self.df)
         self.behaviors: List[Behavior] = parse_behaviors(self.df)
+        self.behavior_name_to_idx = {behavior['name']: idx for idx, behavior in enumerate(load_from_cur_dir('behavior_categories.json'))}
         self.events: List[Event] = self.parse_events(self.df)
         self.annotation_path = None
         self.video_path = None
@@ -135,6 +137,30 @@ class BorisAnnotation:
         '''
         return frame / self.metadata.fps + self.metadata.time_offset
     
+    def stream_annotations(self):
+        #put events in a priority queue
+        event_queue = PriorityQueue()
+        for id, event in enumerate(self.events):
+            event_queue.push((event.start_frame,id, event))
+        # Initialize the priority queue
+        active_events = PriorityQueue()
+        for i in range(self.container.streams.video[0].frames):
+            # Check if any events should start
+            while not event_queue.is_empty() and event_queue.peek()[0] <= i:
+                _, id, event = event_queue.pop()
+                active_events.push((event.end_frame, id, event))
+            # Annotate the frame with the active events
+            observed_behaviors = []
+            for _, _, event in active_events.to_list():
+                behavior_name = event.behavior.name
+                behavior_idx = self.behavior_name_to_idx[behavior_name]
+                observed_behaviors.append(behavior_idx)
+
+            yield onehot(len(self.behavior_name_to_idx), observed_behaviors)
+            # Check if any events should end
+            while not active_events.is_empty() and active_events.peek()[0] <= i:
+                active_events.pop()
+
     def stream_frame_annotations(self):
         '''
         Stream the video frames and their annotations.
