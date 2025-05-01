@@ -1,5 +1,5 @@
 MikeFrames:
-  path: /share/j_sun/jth264/mike
+  path: /share/j_sun/jth264/mikev2
   precomputed_path: /share/j_sun/jth264/precomputed/mike_frames
   label_types: [onehot]
   type: image
@@ -9,7 +9,7 @@ MikeFrames:
 
 
 MikeFramesPatched: 
-  path: /share/j_sun/jth264/mike
+  path: /share/j_sun/jth264/mikev2
   precomputed_path: /share/j_sun/jth264/precomputed/mike_frames_patched_v3
   label_types: [onehot]
   type: video
@@ -29,7 +29,7 @@ MikeFramesPatchedPrecomputed:
   
 
 MikeSlidingWindow: 
-  path: /share/j_sun/jth264/mike
+  path: /share/j_sun/jth264/mikev2
   precomputed_path: /share/j_sun/jth264/precomputed/mike_sliding_window
   label_types: [onehot]
   type: video

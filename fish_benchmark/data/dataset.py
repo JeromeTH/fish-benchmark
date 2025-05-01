@@ -183,6 +183,25 @@ def get_sample_indices(lst_len, clip_len, sample_method = "even-spaced"):
         raise ValueError(f"sample_method {sample_method} not recognized.")
     return indices
 
+class BaseSource:
+    def get_config(self):
+        required_attrs = ['categories', 'label_type', 'total_frames']
+        for attr in required_attrs:
+            if not hasattr(self, attr):
+                raise AttributeError(f"Missing required attribute '{attr}' in {self.__class__.__name__}")
+        return {
+            'categories': self.categories,
+            'label_type': self.label_type,
+            'total_frames': self.total_frames
+        }
+    
+    def __iter__(self):
+        raise NotImplementedError("Subclasses should implement this method")
+    
+    def labels(self) -> Iterator:
+        raise NotImplementedError("Subclasses should implement this method")
+    
+
 @dataclass
 class BaseSlidingWindowDataset(IterableDataset):
     '''
@@ -219,7 +238,7 @@ class BaseSlidingWindowDataset(IterableDataset):
         self.labels = []
         self.source = None
 
-    def set_source(self, source: Iterator):
+    def set_source(self, source: BaseSource):
         '''
         Source iterator should yield (image, label) tuples with images being PIL images and label 
         being a pytorch tensor of shape (num_classes,)
@@ -375,25 +394,14 @@ class BaseSlidingWindowDataset(IterableDataset):
         summary = {}
         summary['metadata'] = asdict(self)
         label_count = torch.zeros(len(self.categories))
-        for _, label in tqdm(self.source): 
+        for label in tqdm(self.source.labels()): 
             assert label.shape == (len(self.categories),), f"label shape {label.shape} does not match categories {self.categories}"
             label_count += label
         summary['label_count'] = label_count.tolist()
         summary['dataset_size'] = len(self)
         return summary
         
-class BaseSource:
-    def get_config(self):
-        required_attrs = ['categories', 'label_type', 'total_frames']
-        for attr in required_attrs:
-            if not hasattr(self, attr):
-                raise AttributeError(f"Missing required attribute '{attr}' in {self.__class__.__name__}")
-        return {
-            'categories': self.categories,
-            'label_type': self.label_type,
-            'total_frames': self.total_frames
-        }
-    
+
 class MikeSource(BaseSource):
     def __init__(self, path):
         self.path = path
@@ -409,6 +417,52 @@ class MikeSource(BaseSource):
     def __iter__(self):
         for frame, annotation in self.source: 
             yield frame, self.annotation_to_label(annotation)
+
+class MikeSourceV2(BaseSource):
+    def __init__(self, path):
+        self.path = path
+        self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
+        self.categories = list(self.behavior_idx_map.keys())
+        self.label_type = "onehot"
+        self.annotation_to_label = lambda x: torch.tensor(x)
+        self.video_paths = get_files_of_type(self.path, ".mp4")
+        self.label_paths = get_files_of_type(self.path, ".tsv")
+        self.label_dict = {
+            os.path.splitext(os.path.basename(p))[0]: p
+            for p in self.label_paths
+        }
+        self.total_frames = self.calculate_total_frames()
+
+    def calculate_total_frames(self):
+        total_frames = 0
+        for track_path in self.video_paths:
+            track_name = os.path.splitext(os.path.basename(track_path))[0]
+            label_path = self.label_dict.get(track_name)
+            if label_path is None:
+                continue
+            
+            container = av.open(track_path)
+            total_frames += container.streams.video[0].frames
+        return total_frames
+    
+    def labels(self):
+        for label_path in self.label_paths:
+            label = np.loadtxt(label_path, delimiter='\t', dtype=int)
+            for i in range(label.shape[0]):
+                yield label[i]
+
+    def __iter__(self):
+        for video_path in self.video_paths:
+            video_name = os.path.splitext(os.path.basename(video_path))[0]
+            label_path = self.label_dict.get(video_name)
+            if label_path is None:
+                continue
+            
+            container = av.open(video_path)
+            label = np.loadtxt(label_path, delimiter='\t', dtype=int)
+            assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {video_path} does not match number of annotations in {label_path}"
+            for i, frame in enumerate(container.decode(video=0)):
+                yield frame.to_image(), self.annotation_to_label(label[i])
 
 
 class AbbySource(BaseSource):
@@ -436,6 +490,12 @@ class AbbySource(BaseSource):
             container = av.open(track_path)
             total_frames += container.streams.video[0].frames
         return total_frames
+    
+    def labels(self):
+        for label_path in self.label_paths:
+            label = np.loadtxt(label_path, delimiter='\t', dtype=int)
+            for i in range(label.shape[0]):
+                yield label[i]
     
     def __iter__(self):
         for track_path in self.track_paths:
@@ -478,6 +538,15 @@ class UCF101Source(BaseSource):
             total_frames += container.streams.video[0].frames
         return total_frames
 
+    def labels(self):
+        for key in self.keys:
+            annotation_path = self.annotation_dict[key]
+            with open(annotation_path, 'r') as f:
+                annotation_idx = int(f.read().strip())
+            container = av.open(self.video_dict[key])
+            for i in range(container.streams.video[0].frames):
+                yield self.annotation_to_label(annotation_idx)
+
     def __iter__(self):
         for key in self.keys:
             video_path = self.video_dict[key]
@@ -489,10 +558,11 @@ class UCF101Source(BaseSource):
                 yield frame.to_image(), self.annotation_to_label(annotation_idx)
 
 def get_source(path, dataset_name):
+
     if dataset_name == 'ucf101':
         return UCF101Source(path)
     elif dataset_name == 'mike':
-        return MikeSource(path)
+        return MikeSourceV2(path)
     elif dataset_name == 'abby':
         return AbbySource(path)
     

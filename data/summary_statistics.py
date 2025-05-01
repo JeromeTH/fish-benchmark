@@ -5,7 +5,7 @@ from dataclasses import asdict
 import torch
 import os 
 dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
-SPECIFIC_DATASETS = ['AbbySlidingWindow']
+SPECIFIC_DATASETS = ['MikeSlidingWindow']
 if __name__ == '__main__':
     for dataset_name in dataset_config:
         print(dataset_name)
