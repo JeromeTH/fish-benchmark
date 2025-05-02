@@ -15,7 +15,7 @@ This project implements video classification benchmarks for fish behavior using 
 To set up the project, clone the repository and install the required dependencies:
 
 ```bash
-conda env create -f environment.yml
+conda env create -f env_clean.yml
 conda activate benchmark
 ```
 
