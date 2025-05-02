@@ -1,0 +1,16 @@
+mike: 
+  path: '/share/j_sun/jth264/mikev2'
+  precomputed_path: '/share/j_sun/jth264/precomputed/mike'
+  sliding_styles: [
+    'sliding_window',
+    'frames',
+    'patched'
+  ]
+
+abby: 
+  path: '/share/j_sun/jth264/abby'
+  precomputed_path: '/share/j_sun/jth264/precomputed/abby'
+  sliding_styles: [
+    'sliding_window',
+    'frames',
+  ]

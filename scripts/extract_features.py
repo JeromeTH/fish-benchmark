@@ -1,3 +1,7 @@
+'''
+extracts features from precomputed inputs
+'''
+
 import yaml
 import os 
 import torch
@@ -5,8 +9,9 @@ from fish_benchmark.utils import setup_logger
 import subprocess
 import argparse
 
-TARGET_MODELS = ['multipatch_dino']
-TARGET_DATASETS = ['UCF101FramesPatchedPrecomputed']
+TARGET_MODELS = ['videomae', 'dino']
+TARGET_DATASETS = ['mike']
+SLIDING_STYLES = ['sliding_window']
 model_config = yaml.safe_load(open("config/models.yml", "r"))
 dataset_config = yaml.safe_load(open("config/datasets.yml", "r"))
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -51,17 +56,17 @@ def get_regular_python_command(subset_path, label_path, dest_path, subset_id, mo
 def main():
     args = get_args()
     PARALLEL = args.parallel
-    for TYPE in ['train', 'test']:
-            for DATASET in TARGET_DATASETS: 
+    for DATASET in TARGET_DATASETS:
+        for SLIDING_STYLE in SLIDING_STYLES:
+            for TYPE in ['train', 'test']:
                 for MODEL in TARGET_MODELS:
                 # check if the model and dataset are compatible
                     if model_config[MODEL]['type'] != dataset_config[DATASET]['type']: 
                         print(f"Model {MODEL} and dataset {DATASET} are not compatible")
                         continue
-                    PATH = os.path.join(dataset_config[DATASET]['path'], TYPE)
+                    PATH = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, TYPE)
                     DEST_ROOT = os.path.join(PATH, f'{MODEL}_features')
                     # Load the model
-                    
                     INPUT_PATH = os.path.join(PATH, 'inputs')
                     LABEL_PATH = os.path.join(PATH, 'labels')
                     for root, dirs, files in os.walk(INPUT_PATH):

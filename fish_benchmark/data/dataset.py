@@ -400,13 +400,22 @@ class BaseSlidingWindowDataset(IterableDataset):
         summary['label_count'] = label_count.tolist()
         summary['dataset_size'] = len(self)
         return summary
-        
+
+def get_categories(dataset_name):
+    if dataset_name == 'ucf101':
+        return load_from_cur_dir('ucf101_categories.json')
+    elif dataset_name == 'mike':
+        return load_behavior_idx_map('behavior_categories.json')
+    elif dataset_name == 'abby':
+        return load_from_cur_dir('abby_dset_categories.json')
+    else:
+        raise ValueError(f"dataset_name {dataset_name} not recognized")
+         
 
 class MikeSource(BaseSource):
     def __init__(self, path):
         self.path = path
-        self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
-        self.categories = list(self.behavior_idx_map.keys())
+        self.categories = get_categories('mike')
         self.label_type = "onehot"
         self.annotation_to_label = lambda x: onehot(len(self.behavior_idx_map), [self.behavior_idx_map[behavior] for behavior in parse_annotation(x)])
         self.SHARD_SIZE = 1000  
@@ -421,8 +430,7 @@ class MikeSource(BaseSource):
 class MikeSourceV2(BaseSource):
     def __init__(self, path):
         self.path = path
-        self.behavior_idx_map = load_behavior_idx_map('behavior_categories.json')
-        self.categories = list(self.behavior_idx_map.keys())
+        self.categories = get_categories('mike')
         self.label_type = "onehot"
         self.annotation_to_label = lambda x: torch.tensor(x)
         self.video_paths = get_files_of_type(self.path, ".mp4")
@@ -468,7 +476,7 @@ class MikeSourceV2(BaseSource):
 class AbbySource(BaseSource):
     def __init__(self, path):
         self.path = path
-        self.categories = load_from_cur_dir('abby_dset_categories.json')
+        self.categories = get_categories('abby')
         self.label_type = "onehot"
         self.annotation_to_label = lambda x: torch.tensor(x)
         self.track_paths = sorted(get_files_of_type(self.path, ".mp4"))
@@ -522,7 +530,7 @@ def get_dicts_and_common_keys(list1, list2):
 class UCF101Source(BaseSource):
     def __init__(self, path):
         self.path = path
-        self.categories = load_from_cur_dir('ucf101_categories.json')
+        self.categories = get_categories('ucf101')
         self.label_type = "onehot"  
         self.annotation_to_label=lambda x: onehot(len(self.categories), [x])
         self.video_paths = sorted(get_files_of_type(self.path, ".avi"))
@@ -565,68 +573,13 @@ def get_source(path, dataset_name):
         return MikeSourceV2(path)
     elif dataset_name == 'abby':
         return AbbySource(path)
-    
-class SlidingWindowConfig(BaseModel):
-    window_size: int
-    tolerance_region: int 
-    samples_per_window: int
-    step_size: int
-    is_image_dataset: bool  
-    shuffle:  bool
-    patch_grid_dim: int
-    temporal_sample_interval: int
-    MAX_BUFFER_SIZE: int
-
-class DatasetConfig(BaseModel):
-    categories: list
-    total_frames: int
-    label_type: str
-
-class DatasetBuilder():
-    def __init__(self, path, dataset_name, style):
-        assert dataset_name in ['ucf101', 'mike', 'abby'], f"dataset_name {dataset_name} not supported"
-        assert style in ['sliding_window', 'frames', 'patched'], f"style {style} not supported"        
-        self.path = path
-        self.set_sliding_window_config(yaml.safe_load(open("config/sliding_window.yml", "r"))[style])
-        self.source = get_source(path, dataset_name)
-        self.set_dataset_config(self.source.get_config())
-        self.input_transform = None
-
-    def set_sliding_window_config(self, config_dict):
-        self.swconfig = SlidingWindowConfig(**config_dict)
-
-    def set_input_transform(self, transform):
-        self.input_transform = transform
-
-    def set_dataset_config(self, config_dict):
-        self.dsconfig = DatasetConfig(**config_dict)
-
-    def set_dsconfig_attr(self, attr_name, value):
-        if not hasattr(self.dsconfig, attr_name):
-            raise AttributeError(f"Config has no attribute '{attr_name}'")
-        setattr(self.dsconfig, attr_name, value)
-
-    def set_swconfig_attr(self, attr_name, value):
-        if not hasattr(self.swconfig, attr_name):
-            raise AttributeError(f"Config has no attribute '{attr_name}'")
-        setattr(self.swconfig, attr_name, value)
-
-    def build(self):
-        config = {
-            **self.swconfig.model_dump(), 
-            **self.dsconfig.model_dump(), 
-            'input_transform': self.input_transform,
-        }
-        dataset = BaseSlidingWindowDataset(**config)
-        dataset.set_source(self.source)
-        return dataset
 
 class PrecomputedDatasetV2(Dataset):
     '''
     Dataset mounted on precomputed sliding window clips and labels. 
     Corresponding clips and labels have the same name but live in different folders
     '''
-    def __init__(self, input_path, label_path, categories, stage = "inputs", transform=None):
+    def __init__(self, input_path, label_path, categories, transform=None):
         '''
         path should be contain 2 subfolders: frames and labels
         '''
@@ -672,53 +625,58 @@ class PrecomputedDatasetV2(Dataset):
         summary['dataset_size'] = len(self)
         return summary
 
-def get_dataset_builder(dataset_name, path, augs=None, label_type = "onehot", shuffle = False):
-    if dataset_name == 'MikeFrames':
-        return DatasetBuilder(path, "mike", "frames")
-    elif dataset_name == 'MikeFramesPatched':
-        return DatasetBuilder(path, "mike", "patched")
-    elif dataset_name == 'MikeSlidingWindow':
-        return DatasetBuilder(path, "mike", "sliding_window")
-    elif dataset_name == 'AbbyFrames':
-        return DatasetBuilder(path, "abby", "frames")
-    elif dataset_name == 'AbbySlidingWindow':
-        return DatasetBuilder(path, "abby", "sliding_window")
-    elif dataset_name == 'UCF101Frames':
-        return DatasetBuilder(path, "ucf101", "frames")
-    elif dataset_name == 'UCF101SlidingWindow':
-        return DatasetBuilder(path, "ucf101", "sliding_window")
-    elif dataset_name == 'UCF101FramesPatched':
-        return DatasetBuilder(path, "ucf101", "patched")
-    else:
-        raise ValueError(f"Dataset {dataset_name} not recognized.")
+class SlidingWindowConfig(BaseModel):
+    window_size: int
+    tolerance_region: int 
+    samples_per_window: int
+    step_size: int
+    is_image_dataset: bool  
+    shuffle:  bool
+    patch_grid_dim: int
+    temporal_sample_interval: int
+    MAX_BUFFER_SIZE: int
 
+class DatasetConfig(BaseModel):
+    categories: list
+    total_frames: int
+    label_type: str
 
-def get_precomputed_dataset(name, path, augs=None, stage = "features", label_type = "onehot", shuffle = False):
-    assert stage in ["multipatch_dino_features", "inputs", "dino_features", "videomae_features"], f"stage {stage} not recognized. Should be features or inputs"
-    if name == 'MikeFramesPatchedPrecomputed':
-        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
-                                    label_path = os.path.join(path, 'labels'),
-                                    categories=load_from_cur_dir('behavior_categories.json'), transform=augs)
-    elif name == 'AbbyFramesPrecomputed':
-        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
-                                       label_path = os.path.join(path, 'labels'),
-                                    categories=load_from_cur_dir('abby_dset_categories.json'), transform=augs)
-    elif name == 'AbbySlidingWindowPrecomputed':
-        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
-                                       label_path = os.path.join(path, 'labels'),
-                                    categories=load_from_cur_dir('abby_dset_categories.json'), transform=augs)
-    elif name == 'UCF101FramesPrecomputed':
-        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
-                                       label_path = os.path.join(path, 'labels'),
-                                    categories=load_from_cur_dir('ucf101_categories.json'), transform=augs)
-    elif name == 'UCF101SlidingWindowPrecomputed':
-        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
-                                       label_path = os.path.join(path, 'labels'),
-                                    categories=load_from_cur_dir('ucf101_categories.json'), transform=augs)
-    elif name == 'UCF101FramesPatchedPrecomputed':
-        dataset = PrecomputedDatasetV2(input_path = os.path.join(path, stage), 
-                                       label_path = os.path.join(path, 'labels'),
-                                    categories=load_from_cur_dir('ucf101_categories.json'), transform=augs)
-    else:
-        raise ValueError(f"Dataset {name} not recognized.")
-    return dataset
+class DatasetBuilder():
+    def __init__(self, path, dataset_name, style, transform=None):
+        assert dataset_name in ['ucf101', 'mike', 'abby'], f"dataset_name {dataset_name} not supported"
+        assert style in ['sliding_window', 'frames', 'patched'], f"style {style} not supported"        
+        self.path = path
+        self.set_sliding_window_config(yaml.safe_load(open("config/sliding_style.yml", "r"))[style])
+        self.source = get_source(path, dataset_name)
+        self.set_dataset_config(self.source.get_config())
+        self.input_transform = None
+        self.transform = transform
+
+    def set_sliding_window_config(self, config_dict):
+        self.swconfig = SlidingWindowConfig(**config_dict)
+
+    def set_transform(self, transform):
+        self.transform = transform
+
+    def set_dataset_config(self, config_dict):
+        self.dsconfig = DatasetConfig(**config_dict)
+
+    def set_dsconfig_attr(self, attr_name, value):
+        if not hasattr(self.dsconfig, attr_name):
+            raise AttributeError(f"Config has no attribute '{attr_name}'")
+        setattr(self.dsconfig, attr_name, value)
+
+    def set_swconfig_attr(self, attr_name, value):
+        if not hasattr(self.swconfig, attr_name):
+            raise AttributeError(f"Config has no attribute '{attr_name}'")
+        setattr(self.swconfig, attr_name, value)
+
+    def build(self):
+        config = {
+            **self.swconfig.model_dump(), 
+            **self.dsconfig.model_dump(), 
+            'input_transform': self.transform,
+        }
+        dataset = BaseSlidingWindowDataset(**config)
+        dataset.set_source(self.source)
+        return dataset   

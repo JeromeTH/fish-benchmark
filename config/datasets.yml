@@ -7,7 +7,6 @@ MikeFrames:
   training_project: "MikeFrames"
   ours: true
 
-
 MikeFramesPatched: 
   path: /share/j_sun/jth264/mikev2
   precomputed_path: /share/j_sun/jth264/precomputed/mike_frames_patched_v3

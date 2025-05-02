@@ -23,6 +23,8 @@ def get_args():
     parser.add_argument("--label_path", required=True)
     parser.add_argument("--dest_path", required=True)
     parser.add_argument("--id", required=True)
+    parser.add_argument("--sliding_style", required=True)
+    parser.add_argument("--dataset", required=True)
     parser.add_argument("--model", required=True)
     #dataset is inferred from the subset_path
     return parser.parse_args()

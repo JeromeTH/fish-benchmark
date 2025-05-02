@@ -2,7 +2,7 @@ import argparse
 import os
 import yaml
 import torch
-from fish_benchmark.data.dataset import get_dataset_builder
+from fish_benchmark.data.dataset import DatasetBuilder
 from fish_benchmark.utils import frame_id_with_padding, setup_logger
 from tqdm import tqdm
 import numpy as np
@@ -16,6 +16,7 @@ def get_args():
     parser.add_argument("--label_dest", required=True)
     parser.add_argument("--id", required=True)
     parser.add_argument("--dataset", required=True)
+    parser.add_argument("--sliding_style", required=True)
     parser.add_argument("--type", default="train")
     return parser.parse_args()
 
@@ -29,8 +30,9 @@ if __name__ == '__main__':
     DATASET = args.dataset
     INPUT_DEST = args.input_dest
     LABEL_DEST = args.label_dest
+    SLIDING_STYLE = args.sliding_style
     ID = args.id
-    dataset_config = yaml.safe_load(open("config/datasets.yml", "r"))
+    dataset_config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
     
     # Check if the path exists
     if not os.path.exists(SOURCE):
@@ -40,11 +42,10 @@ if __name__ == '__main__':
     if DATASET not in dataset_config:
         raise ValueError(f"The specified dataset is not valid: {DATASET}")
     
-    builder = get_dataset_builder(
-        DATASET, 
-        path=SOURCE, 
-        augs=None,
-        shuffle=False
+    builder = DatasetBuilder(
+        path = SOURCE, 
+        dataset_name = DATASET,
+        style= SLIDING_STYLE
     )
     dataset = builder.build()
 
