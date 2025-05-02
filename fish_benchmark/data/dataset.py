@@ -212,7 +212,7 @@ class BaseSlidingWindowDataset(IterableDataset):
     '''
     input_transform: Callable=None, 
     label_type: str= "onehot", 
-    window_size: int=16, 
+    window_size: int=16,  
     tolerance_region: int = 16, 
     samples_per_window: int= 16, 
     step_size: int = 1, 
