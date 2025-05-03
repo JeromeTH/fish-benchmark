@@ -22,7 +22,7 @@ def get_args():
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--sliding_style", required=True)
     parser.add_argument("--model", required=True)
-    parser.add_argument("--epochs", default=200)
+    parser.add_argument("--epochs", default=50)
     parser.add_argument("--lr", default=.00005)
     parser.add_argument("--batch_size", default=32)
     parser.add_argument("--shuffle", default=True)
@@ -76,12 +76,28 @@ if __name__ == '__main__':
             feature_model=MODEL,
         ).build()
 
+        test_dataset = DatasetBuilder(
+            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'test'), 
+            dataset_name = DATASET,
+            style=SLIDING_STYLE,
+            transform=None, 
+            precomputed=True, 
+            feature_model=MODEL,
+        ).build()
+
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, 
             batch_size=run.config['batch_size'], 
             num_workers=7, 
             shuffle=run.config['shuffle']
+        )
+
+        test_dataloader = torch.utils.data.DataLoader(
+            test_dataset, 
+            batch_size=run.config['batch_size'], 
+            num_workers=7, 
+            shuffle=False
         )
         
         # to get hidden size
@@ -104,10 +120,8 @@ if __name__ == '__main__':
         trainer = L.Trainer(max_epochs=run.config['epochs'], 
                             logger=wandb_logger, 
                             log_every_n_steps= 50, 
-                            callbacks=[checkpoint_callback], 
-                            val_check_interval=10, 
-                            limit_val_batches=1)
+                            callbacks=[checkpoint_callback])
         
-        trainer.fit(lit_module, train_dataloader)
+        trainer.fit(lit_module, train_dataloader, test_dataloader)
         log_best_model(checkpoint_callback, run)
         #log_dataset_summary(train_dataset, run)
