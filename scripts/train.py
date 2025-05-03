@@ -1,15 +1,17 @@
 import subprocess
 import os
+import yaml
 
 #arguments of the file to run
 # python training/head.py --classifier mlp --dataset abby --sliding_style frames --model dino
 
-MODELS = ['videomae']
+MODELS = ['videomae', 'dino']
 CLASSIFIERS = ['mlp']
-DATASET = ['abby']
-SLIDING_STYLES = ['sliding_window', 'sliding_window_w_temp', 'sliding_window_w_stride']
+DATASETS = ['abby']
+SLIDING_STYLES = ['frames', 'frames_w_temp', 'sliding_window', 'sliding_window_w_temp', 'sliding_window_w_stride']
 OUTPUT_BASE = os.path.join('logs', 'train')
 PARALLEL = True
+model_config = yaml.safe_load(open("config/models.yml", "r"))
 
 def get_wrap_cmd(model, classifier, dataset, sliding_style):
     return (
@@ -37,8 +39,9 @@ def get_slurm_submission_command(dataset, sliding_style, model, classifier, wrap
 if __name__ == "__main__":
     for MODEL in MODELS:
         for CLASSIFIER in CLASSIFIERS:
-            for DATASET in DATASET:
+            for DATASET in DATASETS:
                 for SLIDING_STYLE in SLIDING_STYLES:
+                    if not SLIDING_STYLE in model_config[MODEL]['sliding_styles']: continue
                     wrap_cmd = get_wrap_cmd(MODEL, CLASSIFIER, DATASET, SLIDING_STYLE)
                     command = get_slurm_submission_command(
                         DATASET, SLIDING_STYLE, MODEL, CLASSIFIER, wrap_cmd

@@ -607,7 +607,7 @@ class PrecomputedDatasetV2(Dataset):
         key = self.keys[idx]
         with step_timer(f"loading {key}", verbose=False):
             input = torch.from_numpy(np.load(self.input_dict[key])).float()
-            label = torch.from_numpy(np.load(self.label_dict[key])).float() 
+            label = torch.from_numpy(np.load(self.label_dict[key]))
         if self.transform:
             input = self.transform(input)
         return input, label

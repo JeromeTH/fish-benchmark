@@ -1,7 +1,12 @@
 import torch
 import torch.nn.functional as F
 import lightning as L
-
+from torchmetrics.functional.classification import (
+    multilabel_precision,
+    multilabel_recall,
+    multilabel_f1_score,
+    multilabel_average_precision
+)
 class LitBinaryClassifierModule(L.LightningModule):
     '''
     subclasses have to have a model component and a classifier component
@@ -30,72 +35,51 @@ class LitBinaryClassifierModule(L.LightningModule):
         self.model = model
 
     def log_additional_metrics(self, prefix, preds, y):
-
-        #recall: for each class, how many of the actual positives are predicted as positive
-        true_labels_count = y.sum()
-        pos_labeles_count = preds.sum()
-        recall = (preds * y).sum() / true_labels_count if true_labels_count > 0 else None
-        if recall: self.log(f'{prefix}_recall', recall)
-        precision = (preds * y).sum() / pos_labeles_count if pos_labeles_count > 0 else None
-        if precision: self.log(f'{prefix}_precision', precision)
-        f1 = 2 * (precision * recall) / (precision + recall).clamp(min=1) if true_labels_count > 0 and pos_labeles_count > 0 and precision + recall > 0 else None
-        if f1: self.log(f'{prefix}_f1', f1)
-        #accuracy: what is the proportion of the labels that are predicted correctly
-        acc = (preds == y).float().mean()
-        self.log(f'{prefix}_acc', acc)
-
-        #per class positive label count
-        per_class_pos_count = y.sum(dim=0)
-        for i, pos_count in enumerate(per_class_pos_count):
-            self.log(f'{prefix}_class_{i}_pos_count', pos_count)
-
-        per_class_pos_pred_count = preds.sum(dim=0)
-        for i, pos_pred_count in enumerate(per_class_pos_pred_count):
-            self.log(f'{prefix}_class_{i}_pos_pred_count', pos_pred_count)
-
-        per_class_accuracy = (preds == y).float().mean(dim=0)
-        for i, acc in enumerate(per_class_accuracy):
-            if per_class_pos_count[i] > 0: 
-                self.log(f'{prefix}_class_{i}_accuracy', acc)
-
-                
-        #diagnose error typesS
-        # if ((preds == 0) & (y == 0)).sum() == 0:
-        #     both_zero = 0
-        # else:
-        #     both_zero = ((preds == 0) & (y == 0)).sum() / preds.numel()
-        # self.log(f'{prefix}_true 0, predicted 0', both_zero)
-
-        # if ((preds == 0) & (y == 1)).sum() == 0:
-        #     pred0_true1 = 0
-        # else:
-        #     pred0_true1 = ((preds == 0) & (y == 1)).sum() / preds.numel()
-        # self.log(f'{prefix}_true 1, predicted 0', pred0_true1)
-
-        # if ((preds == 1) & (y == 0)).sum() == 0:
-        #     pred1_true0 = 0
-        # else:
-        #     pred1_true0 = ((preds == 1) & (y == 0)).sum() / preds.numel()
-        # self.log(f'{prefix}_true 0, predicted 1', pred1_true0)
-
-        # if ((preds == 1) & (y == 1)).sum() == 0:
-        #     both_one = 0
-        # else:
-        #     both_one = ((preds == 1) & (y == 1)).sum() / preds.numel()
-        # self.log(f'{prefix}_true 1, predicted 1', both_one)
+        """
+        Logs micro/macro precision, recall, F1, and mAP for multi-label classification.
         
+        Args:
+            prefix (str): Prefix for logging (e.g., "val" or "test")
+            preds (Tensor): shape (B, C), float tensor after sigmoid thresholding (> 0.5)
+            y (Tensor): shape (B, C), binary ground truth
+        """
+        num_classes = preds.shape[1]
+
+        # Precision & Recall (micro and macro)
+        prec_micro = multilabel_precision(preds, y, num_labels=num_classes, average='micro')
+        prec_macro = multilabel_precision(preds, y, num_labels=num_classes, average='macro')
+        rec_micro = multilabel_recall(preds, y, num_labels=num_classes, average='micro')
+        rec_macro = multilabel_recall(preds, y, num_labels=num_classes, average='macro')
+
+        self.log(f"{prefix}_precision_micro", prec_micro)
+        self.log(f"{prefix}_precision_macro", prec_macro)
+        self.log(f"{prefix}_recall_micro", rec_micro)
+        self.log(f"{prefix}_recall_macro", rec_macro)
+
+        # F1 scores
+        f1_micro = multilabel_f1_score(preds, y, num_labels=num_classes, average='micro')
+        f1_macro = multilabel_f1_score(preds, y, num_labels=num_classes, average='macro')
+
+        self.log(f"{prefix}_f1_micro", f1_micro)
+        self.log(f"{prefix}_f1_macro", f1_macro)
+
+        # mAP
+        map = multilabel_average_precision(preds, y, num_labels=num_classes, average='macro')
+        self.log(f"{prefix}_mAP", map)
+
+        # Accuracy (strict match)
+        acc = (preds == y).float().mean()
+        self.log(f"{prefix}_acc", acc)
 
     def shared_step(self, batch, prefix):
         x, y = batch
-        x = x.float()
-        y = y.float()
         logits = self.model(x)
         # proportion_0 = (y == 0).sum().float() / (y>=0).sum().clamp(min=1)
         # proportion_1 = (y == 1).sum().float() / (y >=0).sum().clamp(min=1)
         # weights = torch.where(y == 1, proportion_1, proportion_0)
         probs = torch.sigmoid(logits)
         #print(weights.shape)
-        loss = F.binary_cross_entropy(probs, y, weight=None)
+        loss = F.binary_cross_entropy(probs, y.float(), weight=None)
         self.log(f'{prefix}_loss', loss)
         preds = (probs > 0.5).float()
         self.log_additional_metrics(prefix, preds, y)
