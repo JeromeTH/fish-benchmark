@@ -612,8 +612,7 @@ class PrecomputedDatasetV2(Dataset):
     def get_summary(self):
         summary = {}
         summary['metadata'] = {
-            'input_path': self.input_path,
-            'label_path': self.label_path,
+            'path': self.path,
             'categories': self.categories,
             'label_type': self.label_type
         }
