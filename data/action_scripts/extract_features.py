@@ -1,5 +1,5 @@
 from fish_benchmark.models import get_pretrained_model, get_input_transform, ModelBuilder
-from fish_benchmark.data.dataset import PrecomputedDatasetV2
+from fish_benchmark.data.dataset import DatasetBuilder
 import yaml 
 import argparse
 from torch.utils.data import DataLoader
@@ -19,18 +19,15 @@ print(f"Using device: {device}")
 # 'python data/action_scripts/extract_features.py --subset_path "{SUBSET_PATH}" --label_path "{LABEL_PATH}" --dest_path "{DEST_PATH}" --id "{SUBSET_ID}" '
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--subset_path", required=True)
-    parser.add_argument("--label_path", required=True)
+    parser.add_argument("--source", required=True)
     parser.add_argument("--dest_path", required=True)
     parser.add_argument("--id", required=True)
     parser.add_argument("--sliding_style", required=True)
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--model", required=True)
+    parser.add_argument("--precomputed", default=False)
     #dataset is inferred from the subset_path
     return parser.parse_args()
-
-dataset_config = yaml.safe_load(open("config/datasets.yml", "r"))
-model_config = yaml.safe_load(open("config/models.yml", "r"))
 
 def save_feature(dest, save_name, feature_tensor):
     path = os.path.join(dest, f"{save_name}.npy")
@@ -50,19 +47,29 @@ def parallel_save_features(outputs, dest_path, video_id, start_frame_id):
         # Wait for all jobs to complete
         for f in futures:
             f.result()
-    
-def calculate_feature(subset_path, label_path, dest_path, video_id, model, input_transform):
-    print(f"loading data mounted at {subset_path}")
-    dataset = PrecomputedDatasetV2(
-                input_path=subset_path,
-                label_path = label_path,  
-                categories=None,
-                transform=input_transform
-            )
-    print("loaded data")
-    print(len(dataset))
-    # for item in tqdm(dataset):
-    #     pass
+
+if __name__ == '__main__':
+    args = get_args()
+    SOURCE = args.source
+    DATASET = args.dataset
+    SLIDING_STYLE = args.sliding_style
+    DEST_PATH = args.dest_path
+    VIDEO_ID = args.id
+    MODEL = args.model
+    PRECOMPUTED = args.precomputed
+
+    builder = ModelBuilder()
+    model = builder.set_model(MODEL).set_pooling('mean').build()
+    model = model.to(device)
+    input_transform = get_input_transform(MODEL)
+
+    dataset = DatasetBuilder(
+        path=SOURCE,
+        dataset_name=DATASET,
+        style=SLIDING_STYLE, 
+        precomputed=PRECOMPUTED
+    ).build()
+
     dataloader = DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
@@ -77,25 +84,4 @@ def calculate_feature(subset_path, label_path, dest_path, video_id, model, input
         with step_timer("Feature Extraction", verbose=PROFILE), torch.no_grad():
             outputs = model(batch_clip)
         with step_timer("Saving Features", verbose=PROFILE):
-            parallel_save_features(outputs, dest_path, video_id, i * BATCH_SIZE)
-
-
-if __name__ == '__main__':
-    args = get_args()
-    SUBSET_PATH = args.subset_path
-    LABEL_PATH = args.label_path
-    DEST_PATH = args.dest_path
-    VIDEO_ID = args.id
-    MODEL = args.model
-
-    builder = ModelBuilder()
-    model = builder.set_model(MODEL).set_pooling('mean').build()
-    model = model.to(device)
-    input_transform = get_input_transform(MODEL)
-
-    calculate_feature(subset_path=SUBSET_PATH, 
-                    label_path=LABEL_PATH, 
-                    dest_path=DEST_PATH, 
-                    video_id=VIDEO_ID, 
-                    model=model, 
-                    input_transform=input_transform)  
+            parallel_save_features(outputs, DEST_PATH, VIDEO_ID, i * BATCH_SIZE)
