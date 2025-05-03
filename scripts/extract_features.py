@@ -17,6 +17,8 @@ PARALLEL = False
 
 model_config = yaml.safe_load(open("config/models.yml", "r"))
 dataset_config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
+sliding_style_config = yaml.safe_load(open("config/sliding_style.yml", "r"))
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 OUT_ROOT = os.path.join('logs', 'extract_features')
 logger = setup_logger('extract_features', os.path.join(OUT_ROOT, 'extract_features.log'))
@@ -53,11 +55,18 @@ def get_slurm_submission_command(model, subset_id, dataset, type, wrap_cmd):
     logger.info(f"Submitted job for {dataset}_{type}_{subset_id} with command: {command}")
     return command 
 
+def check_match(sliding_style, model):
+    if sliding_style_config[sliding_style]['is_image_dataset']: 
+        return model_config[model]['type'] == 'image'
+    else: 
+        return model_config[model]['type'] == 'video'
+
 def main():
     for DATASET in TARGET_DATASETS:
         for SLIDING_STYLE in SLIDING_STYLES:
             for TYPE in ['train', 'test']:
                 for MODEL in TARGET_MODELS:
+                    if not check_match(SLIDING_STYLE, MODEL): continue
                     PATH = (os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, TYPE) 
                             if PRECOMPUTED 
                             else os.path.join(dataset_config[DATASET]['path'], TYPE))
