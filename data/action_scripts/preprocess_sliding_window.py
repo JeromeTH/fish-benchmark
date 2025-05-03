@@ -60,12 +60,10 @@ if __name__ == '__main__':
     logger.info(f"Saving input to {INPUT_DEST}, label to {LABEL_DEST}")
     TOTAL = len(dataset)
     print(len(dataset))
-    for i, (clip, label) in enumerate(dataset):
+    for i, (clip, label) in tqdm(enumerate(dataset)):
         clip_np = clip.clone().cpu().numpy()
         label_np = label.clone().cpu().numpy()
         np.save(os.path.join(INPUT_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), clip_np)
         np.save(os.path.join(LABEL_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), label_np)
-        if i % 100 == 0:
-            logger.info(f"Processed {i}/{TOTAL} clips")
-
-# python data/action_scripts/preprocess_sliding_window.py --source "/share/j_sun/jth264/UCF101_subset/test/Archery" --input_dest "/share/j_sun/jth264/precomputed/UCF101_sliding_window/test/inputs/Archery" --label_dest "/share/j_sun/jth264/precomputed/UCF101_sliding_window/test/labels/Archery" --id "Archery" --dataset "UCF101SlidingWindow"
+        # if i % 100 == 0:
+        #     logger.info(f"Processed {i}/{TOTAL} clips")

@@ -27,9 +27,11 @@ from PIL import Image
 from torchvision.transforms import ToTensor
 from pydantic import BaseModel
 from typing import Callable, Optional, List 
+import logging
 
 to_tensor = ToTensor()
 PROFILE = False
+logger = logging.getLogger(__name__)
 
 class BaseCategoricalDataset(Dataset):
     @property
@@ -514,7 +516,9 @@ class AbbySource(BaseSource):
             
             container = av.open(track_path)
             label = np.loadtxt(label_path, delimiter='\t', dtype=int)
-            assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {track_path} does not match number of annotations in {label_path}"
+            if label.shape[0] != container.streams.video[0].frames:
+                logger.warning(f"Number of frames in {track_path} does not match number of annotations in {label_path}, skipping")
+                continue
             for i, frame in enumerate(container.decode(video=0)):
                 yield frame.to_image(), self.annotation_to_label(label[i])
 
@@ -579,21 +583,19 @@ class PrecomputedDatasetV2(Dataset):
     Dataset mounted on precomputed sliding window clips and labels. 
     Corresponding clips and labels have the same name but live in different folders
     '''
-    def __init__(self, input_path, label_path, categories, transform=None):
+    def __init__(self, path, categories, transform=None):
         '''
         path should be contain 2 subfolders: frames and labels
         '''
         self.label_type = "onehot"
-        self.input_path = input_path
-        self.label_path = label_path
+        self.path = path
         self.transform = transform
         self.categories = categories
-        with step_timer("Retrieving files", verbose=True):  
-            clip_paths = sorted(get_files_of_type(input_path, ".npy"))
-            label_paths = sorted(get_files_of_type(label_path, ".npy"))
+        file_paths = get_files_of_type(path, ".npy")
+        self.label_paths = [p for p in file_paths if "labels" in p]
+        self.input_paths = [p for p in file_paths if "inputs" in p]
 
-        with step_timer("Matching keys", verbose=True):
-            self.clip_dict, self.label_dict, self.keys = get_dicts_and_common_keys(clip_paths, label_paths)
+        self.input_dict, self.label_dict, self.keys = get_dicts_and_common_keys(self.input_paths, self.label_paths)
 
     def __len__(self):
         return len(self.keys)
@@ -601,11 +603,11 @@ class PrecomputedDatasetV2(Dataset):
     def __getitem__(self, idx):
         key = self.keys[idx]
         with step_timer(f"loading {key}", verbose=False):
-            clip = torch.from_numpy(np.load(self.clip_dict[key])).float()
+            input = torch.from_numpy(np.load(self.input_dict[key])).float()
             label = torch.from_numpy(np.load(self.label_dict[key])).float() 
         if self.transform:
-            clip = self.transform(clip)
-        return clip, label
+            input = self.transform(input)
+        return input, label
 
     def get_summary(self):
         summary = {}
@@ -642,7 +644,7 @@ class DatasetConfig(BaseModel):
     label_type: str
 
 class DatasetBuilder():
-    def __init__(self, path, dataset_name, style, transform=None):
+    def __init__(self, path, dataset_name, style, transform=None, precomputed=False):
         assert dataset_name in ['ucf101', 'mike', 'abby'], f"dataset_name {dataset_name} not supported"
         assert style in ['sliding_window', 'frames', 'patched'], f"style {style} not supported"        
         self.path = path
@@ -651,6 +653,7 @@ class DatasetBuilder():
         self.set_dataset_config(self.source.get_config())
         self.input_transform = None
         self.transform = transform
+        self.precomputed = precomputed
 
     def set_sliding_window_config(self, config_dict):
         self.swconfig = SlidingWindowConfig(**config_dict)
@@ -672,11 +675,14 @@ class DatasetBuilder():
         setattr(self.swconfig, attr_name, value)
 
     def build(self):
-        config = {
-            **self.swconfig.model_dump(), 
-            **self.dsconfig.model_dump(), 
-            'input_transform': self.transform,
-        }
-        dataset = BaseSlidingWindowDataset(**config)
-        dataset.set_source(self.source)
-        return dataset   
+        if self.precomputed: 
+            return PrecomputedDatasetV2(self.path, self.dsconfig.categories, self.transform)
+        else: 
+            config = {
+                **self.swconfig.model_dump(), 
+                **self.dsconfig.model_dump(), 
+                'input_transform': self.transform,
+            }
+            dataset = BaseSlidingWindowDataset(**config)
+            dataset.set_source(self.source)
+            return dataset   

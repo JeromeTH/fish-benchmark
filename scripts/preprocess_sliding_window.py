@@ -4,14 +4,14 @@ import yaml
 from fish_benchmark.utils import setup_logger
 
 # Example config values (replace with loading from a file if needed)
-TARGETS = ["mike"]
-PARALLEL = False
+TARGETS = ["abby"]
+PARALLEL = True
 
 config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
-# logger = setup_logger(
-#     'precompute_sliding_window', 'logs/output/precompute_sliding_window.log'
-# )
-logger = setup_logger('precompute_sliding_window')
+logger = setup_logger(
+    'precompute_sliding_window', 'logs/output/precompute_sliding_window.log'
+)
+# logger = setup_logger('precompute_sliding_window')
 
 def get_wrap_cmd(source, input_dest, label_dest, subset, dataset, sliding_style):
     return (
@@ -43,8 +43,8 @@ def main():
                 for SUBSET in os.listdir(root_dir):
                     assert(os.path.isdir(os.path.join(root_dir, SUBSET))), f"Subset path {SUBSET} is not a directory"
                     SOURCE = os.path.join(root_dir, SUBSET)
-                    INPUT_DEST = os.path.join(dest_root_dir, 'inputs', SUBSET)
-                    LABEL_DEST = os.path.join(dest_root_dir, 'labels', SUBSET)
+                    INPUT_DEST = os.path.join(dest_root_dir, SUBSET, 'inputs')
+                    LABEL_DEST = os.path.join(dest_root_dir, SUBSET, 'labels')
                     output_dir = os.path.join('logs', 'precompute_sliding_window', DATASET, SLIDING_STYLE, TYPE, SUBSET)
                     os.makedirs(output_dir, exist_ok=True)
                     # submit a job for each subset
