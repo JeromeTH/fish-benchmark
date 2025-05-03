@@ -31,6 +31,7 @@ import logging
 
 to_tensor = ToTensor()
 PROFILE = False
+PROFILE_LOADING = True
 logger = logging.getLogger(__name__)
 
 class BaseCategoricalDataset(Dataset):
@@ -358,8 +359,6 @@ class BaseSlidingWindowDataset(IterableDataset):
             tensor_clip = self.numpy_to_tensor(clip)
         with step_timer("applying vision transform", verbose=PROFILE):
             if self.input_transform:
-                print("input_transform")
-                print(self.input_transform)
                 tensor_clip = self.input_transform(tensor_clip)
 
         if self.is_image_dataset: tensor_clip = tensor_clip.squeeze()
@@ -583,7 +582,7 @@ class PrecomputedDatasetV2(Dataset):
     Dataset mounted on precomputed sliding window clips and labels. 
     Corresponding clips and labels have the same name but live in different folders
     '''
-    def __init__(self, path, categories, transform=None):
+    def __init__(self, path, categories, transform=None, feature_model=None):
         '''
         path should be contain 2 subfolders: frames and labels
         '''
@@ -591,11 +590,15 @@ class PrecomputedDatasetV2(Dataset):
         self.path = path
         self.transform = transform
         self.categories = categories
-        file_paths = get_files_of_type(path, ".npy")
-        self.label_paths = [p for p in file_paths if "labels" in p]
-        self.input_paths = [p for p in file_paths if "inputs" in p]
-
-        self.input_dict, self.label_dict, self.keys = get_dicts_and_common_keys(self.input_paths, self.label_paths)
+        with step_timer("fetching files", verbose=PROFILE_LOADING):
+            file_paths = get_files_of_type(self.path, ".npy")
+        print(f"found {len(file_paths)} files")
+        with step_timer("filtering files", verbose=PROFILE_LOADING):
+            self.label_paths = [p for p in file_paths if "labels" in p]
+            INPUT_TYPE = "inputs" if feature_model is None else f"{feature_model}_features"
+            self.input_paths = [p for p in file_paths if INPUT_TYPE in p]
+        with step_timer("getting dicts", verbose=PROFILE_LOADING):
+            self.input_dict, self.label_dict, self.keys = get_dicts_and_common_keys(self.input_paths, self.label_paths)
 
     def __len__(self):
         return len(self.keys)
@@ -643,9 +646,7 @@ class DatasetConfig(BaseModel):
     label_type: str
 
 class DatasetBuilder():
-    def __init__(self, path, dataset_name, style, transform=None, precomputed=False):
-        assert dataset_name in ['ucf101', 'mike', 'abby'], f"dataset_name {dataset_name} not supported"
-        assert style in ['sliding_window', 'frames', 'patched'], f"style {style} not supported"        
+    def __init__(self, path, dataset_name, style, transform=None, precomputed=False, feature_model=None):
         self.path = path
         self.set_sliding_window_config(yaml.safe_load(open("config/sliding_style.yml", "r"))[style])
         self.source = get_source(path, dataset_name)
@@ -653,6 +654,8 @@ class DatasetBuilder():
         self.input_transform = None
         self.transform = transform
         self.precomputed = precomputed
+        if feature_model: assert transform is None, "cannot transform extracted features"
+        self.feature_model = feature_model
 
     def set_sliding_window_config(self, config_dict):
         self.swconfig = SlidingWindowConfig(**config_dict)
@@ -675,7 +678,8 @@ class DatasetBuilder():
 
     def build(self):
         if self.precomputed: 
-            return PrecomputedDatasetV2(self.path, self.dsconfig.categories, self.transform)
+            #if precomputed is true, then the sliding style information should be contained in the path
+            return PrecomputedDatasetV2(self.path, self.dsconfig.categories, self.transform, self.feature_model)
         else: 
             config = {
                 **self.swconfig.model_dump(), 

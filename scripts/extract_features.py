@@ -9,11 +9,11 @@ from fish_benchmark.utils import setup_logger
 import subprocess
 import argparse
 
-TARGET_MODELS = ['dino']
+TARGET_MODELS = ['videomae']
 TARGET_DATASETS = ['abby']
-SLIDING_STYLES = ['frames']
-PRECOMPUTED = True
-PARALLEL = False
+SLIDING_STYLES = ['sliding_window', 'sliding_window_w_temp', 'sliding_window_w_stride']
+PRECOMPUTED = False
+PARALLEL = True
 
 model_config = yaml.safe_load(open("config/models.yml", "r"))
 dataset_config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
@@ -67,15 +67,18 @@ def main():
             for TYPE in ['train', 'test']:
                 for MODEL in TARGET_MODELS:
                     if not check_match(SLIDING_STYLE, MODEL): continue
-                    PATH = (os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, TYPE) 
+                    SOURCE_PATH = (os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, TYPE) 
                             if PRECOMPUTED 
                             else os.path.join(dataset_config[DATASET]['path'], TYPE))
-                    for SUBSET in os.listdir(PATH):
-                        SUBSET_PATH = os.path.join(PATH, SUBSET)
-                        SOURCE = os.path.join(SUBSET_PATH, 'inputs')
-                        DEST_PATH = os.path.join(SUBSET_PATH, f'{MODEL}_features')
+                    
+                    DEST_PATH = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, TYPE)
+                    for SUBSET in os.listdir(SOURCE_PATH):
+                        SUBSET_PATH = os.path.join(SOURCE_PATH, SUBSET)
+                        SUBSET_DEST_PATH = os.path.join(DEST_PATH, SUBSET)
+                        SUBSET_SOURCE = os.path.join(SUBSET_PATH, 'inputs') if PRECOMPUTED else SUBSET_PATH
+                        FEATURE_DEST = os.path.join(SUBSET_DEST_PATH, f'{MODEL}_features')
                         wrap_cmp = get_wrap_command(
-                            SOURCE, DATASET, SLIDING_STYLE, DEST_PATH, SUBSET, MODEL, PRECOMPUTED
+                            SUBSET_SOURCE, DATASET, SLIDING_STYLE, FEATURE_DEST, SUBSET, MODEL, PRECOMPUTED
                         )
                         command = get_slurm_submission_command(MODEL, SUBSET, DATASET, TYPE, wrap_cmp) if PARALLEL else wrap_cmp    
                         subprocess.run(command, shell=True, check=True)

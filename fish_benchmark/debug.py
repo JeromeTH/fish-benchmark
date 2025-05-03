@@ -5,6 +5,7 @@ import torch
 
 @contextmanager
 def step_timer(name, verbose=True):
+    if verbose: print(f"[{name}] started")
     start = time.time()
     yield
     end = time.time()

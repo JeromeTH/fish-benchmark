@@ -10,6 +10,7 @@ from tqdm import tqdm
 from fish_benchmark.utils import frame_id_with_padding
 from fish_benchmark.debug import step_timer
 import numpy as np
+import shutil
 
 BATCH_SIZE = 32
 PROFILE = False 
@@ -56,7 +57,7 @@ if __name__ == '__main__':
     DEST_PATH = args.dest_path
     VIDEO_ID = args.id
     MODEL = args.model
-    PRECOMPUTED = args.precomputed
+    PRECOMPUTED = True if args.precomputed == 'True' else False
 
     builder = ModelBuilder()
     model = builder.set_model(MODEL).set_pooling('mean').build()
@@ -67,6 +68,7 @@ if __name__ == '__main__':
         path=SOURCE,
         dataset_name=DATASET,
         style=SLIDING_STYLE, 
+        transform=input_transform,
         precomputed=PRECOMPUTED
     ).build()
 
@@ -77,6 +79,9 @@ if __name__ == '__main__':
         num_workers=4,
         pin_memory=True
     )
+
+    if os.path.exists(DEST_PATH): shutil.rmtree(DEST_PATH)
+    print(dataset.total_frames)
     print("loaded dataloader")
     for i, (batch_clip, _) in tqdm(enumerate(dataloader)):
         #print(f"Processing batch {i + 1}/{len(dataloader)}")
