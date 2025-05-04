@@ -5,6 +5,7 @@ from fish_benchmark.models import get_input_transform
 from tqdm import tqdm
 from dataclasses import asdict
 from fish_benchmark.utils import setup_logger 
+import os
 
 logger = setup_logger("iterate_dataset")
 
@@ -23,12 +24,14 @@ if __name__ == '__main__':
     config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
     input_transform = None
     builder = DatasetBuilder(
-        path= config[DATASET]['path'] + '/train',
+        path= os.path.join(config[DATASET]['precomputed_path'], STYLE, 'train'),
         dataset_name=DATASET,
         style=STYLE,
+        precomputed=True, 
+        feature_model=MODEL,
     )
     dataset = builder.build()
-    print(dataset.get_summary())
+    # print(dataset.get_summary())
     for frame, label in tqdm(dataset):
         pass
     

@@ -5,7 +5,9 @@ from fish_benchmark.utils import setup_logger
 
 # Example config values (replace with loading from a file if needed)
 TARGETS = ["abby"]
+SLIDING_STYLES = ["frames_w_temp", "sliding_window_w_temp", "sliding_window_w_stride"]
 PARALLEL = True
+SAVE_INPUT = False
 
 config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
 logger = setup_logger(
@@ -16,7 +18,8 @@ logger = setup_logger(
 def get_wrap_cmd(source, input_dest, label_dest, subset, dataset, sliding_style):
     return (
         f'python data/action_scripts/preprocess_sliding_window.py '
-        f'--source "{source}" --input_dest "{input_dest}" --label_dest "{label_dest}" --id "{subset}" --dataset "{dataset}" --sliding_style "{sliding_style}"'
+        f'--source "{source}" --input_dest "{input_dest}" --label_dest "{label_dest}" --id "{subset}" --dataset "{dataset}" '
+        f'--save_input {SAVE_INPUT} --sliding_style "{sliding_style}"'
     )
 
 def get_slurm_submission_command(dataset, sliding_style, type, subset, output_dir, wrap_cmd):
@@ -36,7 +39,7 @@ def get_slurm_submission_command(dataset, sliding_style, type, subset, output_di
 
 def main():
     for DATASET in TARGETS:
-        for SLIDING_STYLE in config[DATASET]['sliding_styles']:
+        for SLIDING_STYLE in SLIDING_STYLES:
             for TYPE in ['train', 'test']:
                 root_dir = os.path.join(config[DATASET]['path'], TYPE)
                 dest_root_dir = os.path.join(config[DATASET]['precomputed_path'], SLIDING_STYLE, TYPE)

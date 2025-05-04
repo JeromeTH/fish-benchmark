@@ -1,6 +1,4 @@
 import wandb
-from fish_benchmark.data.dataset import get_summary
-
 def log_best_model(checkpoint_callback, run):
     if checkpoint_callback.best_model_path:
         artifact = wandb.Artifact(
@@ -17,7 +15,7 @@ def log_best_model(checkpoint_callback, run):
 
 def log_dataset_summary(dataset, run):
     #store summary
-    summary = get_summary(dataset)
+    summary = dataset.get_summary()
     artifact = wandb.Artifact(
         name=f"dataset-{run.id}",
         type="dataset",

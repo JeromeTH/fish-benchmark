@@ -4,7 +4,7 @@ In this file, we want to train the video MAE model for video classification with
 import torch
 import lightning as L
 from fish_benchmark.models import get_input_transform, get_pretrained_model, ModelBuilder
-from fish_benchmark.data.dataset import get_dataset, get_precomputed_dataset
+from fish_benchmark.data.dataset import DatasetBuilder
 from fish_benchmark.litmodule import get_lit_module
 from pytorch_lightning.loggers import WandbLogger
 import wandb
@@ -15,16 +15,14 @@ import sys
 from artifact import log_best_model, log_dataset_summary
 import os
 import json
-# python training/head.py --classifier "mlp" --dataset "MikeFramesPatchedPrecomputed" --model "multipatch_dino" 
-# python training/head.py --classifier "mlp" --dataset "AbbyFramesPrecomputed" --model "dino"
-# python training/head.py --classifier "mlp" --dataset "AbbySlidingWindowPrecomputed" --model "videomae"
-# python training/head.py --classifier "mlp" --dataset "UCF101SlidingWindowPrecomputed" --model "videomae"
+# python training/head.py --classifier mlp --dataset abby --sliding_style frames --model dino
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--classifier", required=True)
     parser.add_argument("--dataset", required=True)
+    parser.add_argument("--sliding_style", required=True)
     parser.add_argument("--model", required=True)
-    parser.add_argument("--epochs", default=200)
+    parser.add_argument("--epochs", default=50)
     parser.add_argument("--lr", default=.00005)
     parser.add_argument("--batch_size", default=32)
     parser.add_argument("--shuffle", default=True)
@@ -39,23 +37,28 @@ if __name__ == '__main__':
     EPOCHS = args.epochs
     LEARNING_RATE = args.lr
     BATCH_SIZE = args.batch_size
+    SLIDING_STYLE = args.sliding_style
     SHUFFLE = args.shuffle
     MODEL = args.model
     LABEL_TYPE = args.label_type
 
-    dataset_config = yaml.safe_load(open('config/datasets.yml', 'r'))
+    dataset_config = yaml.safe_load(open('config/datasetsv2.yml', 'r'))
     available_gpus = torch.cuda.device_count()
     print(f"Available GPUs: {available_gpus}")
-
-    PROJECT = f"{dataset_config[DATASET]['training_project']}_training"
-    print(type(dataset_config[DATASET]['preprocessed']))
-
     with wandb.init(
-        project=PROJECT,
+        project=DATASET,
         entity = "fish-benchmark",
         notes="Using precomputed embeddings",
-        tags=[CLASSIFIER, DATASET, MODEL],
-        config={"epochs": EPOCHS, "learning_rate": LEARNING_RATE, "batch_size": BATCH_SIZE, "optimizer": "adam", "classifier": CLASSIFIER, "model": MODEL, "dataset": DATASET, "shuffle": SHUFFLE},
+        tags=[CLASSIFIER, DATASET, SLIDING_STYLE, MODEL],
+        config={"epochs": EPOCHS, 
+                "learning_rate": LEARNING_RATE, 
+                "batch_size": BATCH_SIZE, 
+                "optimizer": "adam", 
+                "classifier": CLASSIFIER, 
+                "model": MODEL, 
+                "dataset": DATASET, 
+                "sliding_style": SLIDING_STYLE, 
+                "shuffle": SHUFFLE},
         dir="./logs"
     ) as run:
         wandb_logger = WandbLogger(
@@ -64,11 +67,23 @@ if __name__ == '__main__':
             log_model="best"
         )
         print("Loading data...")
-        train_dataset = get_precomputed_dataset(
-            name = DATASET,
-            path = os.path.join(dataset_config[DATASET]['path'], 'train'), 
-            stage = f'{MODEL}_features'
-        )
+        train_dataset = DatasetBuilder(
+            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'train'), 
+            dataset_name = DATASET,
+            style=SLIDING_STYLE,
+            transform=None, 
+            precomputed=True, 
+            feature_model=MODEL,
+        ).build()
+
+        test_dataset = DatasetBuilder(
+            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'test'), 
+            dataset_name = DATASET,
+            style=SLIDING_STYLE,
+            transform=None, 
+            precomputed=True, 
+            feature_model=MODEL,
+        ).build()
 
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(
@@ -77,13 +92,17 @@ if __name__ == '__main__':
             num_workers=7, 
             shuffle=run.config['shuffle']
         )
+
+        test_dataloader = torch.utils.data.DataLoader(
+            test_dataset, 
+            batch_size=run.config['batch_size'], 
+            num_workers=7, 
+            shuffle=False
+        )
         
         # to get hidden size
-    
-        model = get_pretrained_model(MODEL)
-        hidden_size = model.config.hidden_size
-        builder = ModelBuilder()
-        classifier = builder.set_classifier(CLASSIFIER, 
+        hidden_size = ModelBuilder().set_model(MODEL).get_hidden_size()
+        classifier = ModelBuilder().set_classifier(CLASSIFIER, 
                                             input_dim=hidden_size, 
                                             output_dim=len(train_dataset.categories)).build()
         
@@ -101,10 +120,8 @@ if __name__ == '__main__':
         trainer = L.Trainer(max_epochs=run.config['epochs'], 
                             logger=wandb_logger, 
                             log_every_n_steps= 50, 
-                            callbacks=[checkpoint_callback], 
-                            val_check_interval=10, 
-                            limit_val_batches=1)
+                            callbacks=[checkpoint_callback])
         
-        trainer.fit(lit_module, train_dataloader)
+        trainer.fit(lit_module, train_dataloader, test_dataloader)
         log_best_model(checkpoint_callback, run)
         #log_dataset_summary(train_dataset, run)

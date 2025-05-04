@@ -1,9 +1,18 @@
 videomae: 
   type: video
+  sliding_styles: [
+    'sliding_window', 
+    'sliding_window_w_temp',
+    'sliding_window_w_stride',
+  ]
 clip: 
   type: image 
 dino: 
   type: image
+  sliding_styles: [
+    'frames', 
+    'frames_w_temp',
+  ]
 swinv2: 
   type: image
 timesformer: 

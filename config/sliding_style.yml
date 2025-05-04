@@ -9,6 +9,17 @@ frames:
   temporal_sample_interval: 2
   MAX_BUFFER_SIZE: 100
 
+frames_w_temp: 
+  window_size: 1 
+  tolerance_region: 0
+  samples_per_window: 1 
+  step_size: 1
+  is_image_dataset: True 
+  shuffle:  False
+  patch_grid_dim: 1 
+  temporal_sample_interval: 1
+  MAX_BUFFER_SIZE: 100
+
 sliding_window: 
   window_size: 16 
   tolerance_region: 7
@@ -17,7 +28,30 @@ sliding_window:
   is_image_dataset: False 
   shuffle: False
   patch_grid_dim: 1 
+  temporal_sample_interval: 2
+  MAX_BUFFER_SIZE: 100
+
+
+sliding_window_w_temp: 
+  window_size: 16 
+  tolerance_region: 7
+  samples_per_window: 16 
+  step_size: 16
+  is_image_dataset: False 
+  shuffle: False
+  patch_grid_dim: 1 
   temporal_sample_interval: 1
+  MAX_BUFFER_SIZE: 100
+
+sliding_window_w_stride: 
+  window_size: 16 
+  tolerance_region: 7
+  samples_per_window: 16 
+  step_size: 32
+  is_image_dataset: False 
+  shuffle: False
+  patch_grid_dim: 1 
+  temporal_sample_interval: 2
   MAX_BUFFER_SIZE: 100
 
 patched: 

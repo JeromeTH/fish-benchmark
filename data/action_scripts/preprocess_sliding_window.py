@@ -18,6 +18,7 @@ def get_args():
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--sliding_style", required=True)
     parser.add_argument("--type", default="train")
+    parser.add_argument("--save_input", default=True)
     return parser.parse_args()
 
 logger = setup_logger(
@@ -31,6 +32,7 @@ if __name__ == '__main__':
     INPUT_DEST = args.input_dest
     LABEL_DEST = args.label_dest
     SLIDING_STYLE = args.sliding_style
+    SAVE_INPUT = True if args.save_input == 'True' else False
     ID = args.id
     dataset_config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
     
@@ -50,12 +52,10 @@ if __name__ == '__main__':
     dataset = builder.build()
 
     # Delete old folders if they exist
-    for path in [INPUT_DEST, LABEL_DEST]:
-        if os.path.exists(path):
-            logger.warning(f"Deleting existing destination folder: {path}")
-            shutil.rmtree(path)
+    if SAVE_INPUT and os.path.exists(INPUT_DEST): shutil.rmtree(INPUT_DEST)
+    if os.path.exists(LABEL_DEST): shutil.rmtree(LABEL_DEST)
             
-    os.makedirs(INPUT_DEST, exist_ok=True)
+    if SAVE_INPUT: os.makedirs(INPUT_DEST, exist_ok=True)
     os.makedirs(LABEL_DEST, exist_ok=True)
     logger.info(f"Saving input to {INPUT_DEST}, label to {LABEL_DEST}")
     TOTAL = len(dataset)
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     for i, (clip, label) in tqdm(enumerate(dataset)):
         clip_np = clip.clone().cpu().numpy()
         label_np = label.clone().cpu().numpy()
-        np.save(os.path.join(INPUT_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), clip_np)
+        if SAVE_INPUT: np.save(os.path.join(INPUT_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), clip_np)
         np.save(os.path.join(LABEL_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), label_np)
         # if i % 100 == 0:
         #     logger.info(f"Processed {i}/{TOTAL} clips")
