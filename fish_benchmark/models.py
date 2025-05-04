@@ -22,6 +22,20 @@ class MaxPooling(nn.Module):
     def forward(self, x):
         return x.max(dim=self.dim).values
 
+class AttentionPooling(nn.Module):
+    def __init__(self, embed_dim, num_heads=8):
+        super().__init__()
+        self.query_token = nn.Parameter(torch.randn(1, 1, embed_dim))
+        self.norm = nn.LayerNorm(embed_dim)
+        self.attn = nn.MultiheadAttention(embed_dim, num_heads=num_heads, batch_first=True)
+    
+    def forward(self, x):
+        B = x.size(0)
+        q = self.query_token.expand(B, -1, -1)  # [B, 1, D]
+        x = self.norm(x)
+        attn_out, _ = self.attn(q, x, x)
+        return attn_out.squeeze(1)  # [B, D]
+    
 class MLP(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers):
         super().__init__()
@@ -44,20 +58,38 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.mlp(x)
 
+# class AttentionBlock(nn.Module):
+#     def __init__(self, embed_dim, output_dim):
+#         super().__init__()
+#         self.query = nn.Parameter(torch.randn(1, output_dim, embed_dim))
+#         self.attention = nn.MultiheadAttention(embed_dim, num_heads=1, batch_first=True)
+#         self.head = nn.Linear(embed_dim, 1)
+
+#     def forward(self, last_hidden_state):
+#         batch_size = last_hidden_state.size(0)
+#         query = self.query.expand(batch_size, -1, -1) 
+#         attn_output, _ = self.attention(query, last_hidden_state, last_hidden_state)
+#         output = self.head(attn_output).squeeze(-1)
+#         return output
+    
 class AttentionBlock(nn.Module):
-    def __init__(self, embed_dim, output_dim):
+    def __init__(self, embed_dim, num_classes):
         super().__init__()
-        self.query = nn.Parameter(torch.randn(1, output_dim, embed_dim))
+        self.query_token = nn.Parameter(torch.randn(1, 1, embed_dim))
+        self.norm1 = nn.LayerNorm(embed_dim)
         self.attention = nn.MultiheadAttention(embed_dim, num_heads=1, batch_first=True)
-        self.head = nn.Linear(embed_dim, 1)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.classifier = nn.Linear(embed_dim, num_classes)
 
     def forward(self, last_hidden_state):
-        batch_size = last_hidden_state.size(0)
-        query = self.query.expand(batch_size, -1, -1) 
-        attn_output, _ = self.attention(query, last_hidden_state, last_hidden_state)
-        output = self.head(attn_output).squeeze(-1)
+        B = last_hidden_state.size(0)
+        query_token = self.query_token.expand(B, -1, -1)  # (B, 1, D)
+        normed_input = self.norm1(last_hidden_state)  # (B, N, D)
+        attn_output, _ = self.attention(query_token, normed_input, normed_input)
+        attn_output = self.norm2(attn_output)
+        output = self.classifier(attn_output.squeeze(1)) # shape: (B, output_dim)
         return output
-
+    
 class MultipatchDino(nn.Module):
     '''
     applies dino model to each patch of the seqence of patches. Behaves like a video model. 
@@ -93,11 +125,14 @@ def get_classifier(input_dim, output_dim, type):
     else:
         raise ValueError(f"Unknown classifier type: {type}")
 
-def get_pooling(type, dim):
+def get_pooling(type, dim, hidden_size=None):
     if type == 'mean':
         return MeanPooling(dim=dim)
     elif type == 'max':
         return MaxPooling(dim=dim)
+    elif type == 'attention':
+        assert hidden_size is not None, "Attention pooling requires hidden_size"
+        return AttentionPooling(embed_dim=hidden_size)
     else:
         raise ValueError(f"Unknown pooling type: {type}")
     
@@ -200,13 +235,13 @@ class ModelBuilder():
         return self
 
     def build(self):
-        assert self.pooling is None or self.classifier != "attention", "Attention classifier includes pooling"
         #dimension check
         if self.classifier and self.model: assert self.classifier_input_dim == self.hidden_size, f"Classifier input dimension {self.classifier_input_dim} does not match model hidden size {self.hidden_size}"
         MODEL = get_pretrained_model(self.model) if self.model else nn.Identity()
-        POOLING = get_pooling(self.pooling, dim=1) if self.pooling else nn.Identity()
+        POOLING = get_pooling(self.pooling, dim=1, hidden_size=self.hidden_size) if self.pooling else nn.Identity()
         CLASSIFIER = get_classifier(self.classifier_input_dim, self.classifier_output_dim, self.classifier) if self.classifier else nn.Identity()
         return BaseModelV2(MODEL, POOLING, CLASSIFIER)
+
 
 # class VideoClassifier(nn.Module):
 #     def __init__(self, num_classes, pretrained_model = 'videomae', classifier_type='mlp', freeze_pretrained=True):
