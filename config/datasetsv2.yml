@@ -4,6 +4,9 @@ mike:
   sliding_styles: [
     'sliding_window',
     'frames',
+    'frames_w_temp',
+    'sliding_window_w_temp',
+    'sliding_window_w_stride',
     'patched'
   ]
 
@@ -11,6 +14,9 @@ abby:
   path: '/share/j_sun/jth264/abby'
   precomputed_path: '/share/j_sun/jth264/precomputed/abby'
   sliding_styles: [
-    'sliding_window',
     'frames',
+    'frames_w_temp',
+    'sliding_window',
+    'sliding_window_w_temp',
+    'sliding_window_w_stride',
   ]

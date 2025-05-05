@@ -213,10 +213,13 @@ class ModelBuilder():
         self.model = None
         self.pooling = None
         self.classifier = None
+        self.hidden_size = None
+
+    def set_hidden_size(self, hidden_size):
+        self.hidden_size = hidden_size
+        return self
 
     def get_hidden_size(self):
-        if self.model is None:
-            raise ValueError("Model not set. Please set the model first.")
         return self.hidden_size
     
     def set_model(self, model):

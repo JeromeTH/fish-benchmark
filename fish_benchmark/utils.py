@@ -84,12 +84,18 @@ def sample_frame_indices(clip_len, frame_sample_rate, seg_len):
 #     )
 #     return dataset
 
-def get_files_of_type(folder_path, file_type):
+def get_files_of_type(folder_path, file_type, min_ctime = None):
     res = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
             if file.lower().endswith(file_type) and not file.startswith("._"):
-                res.append(os.path.join(root, file))
+                file_path = os.path.join(root, file)
+                if min_ctime is not None: 
+                    ctime = os.path.getctime(file_path)
+                    if ctime < min_ctime:
+                        print(f"File {file_path} has ctime {ctime} < min_ctime {min_ctime}, skipping.")
+                        continue
+                res.append(file_path)
     return res
 
 def extract_annotation_identifier(filename):

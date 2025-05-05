@@ -399,7 +399,7 @@ class BaseSlidingWindowDataset(IterableDataset):
             assert label.shape == (len(self.categories),), f"label shape {label.shape} does not match categories {self.categories}"
             label_count += label
         summary['label_count'] = label_count.tolist()
-        summary['dataset_size'] = len(self)
+        #summary['dataset_size'] = len(self)
         return summary
 
 def get_categories(dataset_name):
@@ -582,7 +582,7 @@ class PrecomputedDatasetV2(Dataset):
     Dataset mounted on precomputed sliding window clips and labels. 
     Corresponding clips and labels have the same name but live in different folders
     '''
-    def __init__(self, path, categories, transform=None, feature_model=None):
+    def __init__(self, path, categories, transform=None, feature_model=None, min_ctime=None):
         '''
         path should be contain 2 subfolders: frames and labels
         '''
@@ -591,14 +591,19 @@ class PrecomputedDatasetV2(Dataset):
         self.transform = transform
         self.categories = categories
         with step_timer("fetching files", verbose=PROFILE_LOADING):
-            file_paths = get_files_of_type(self.path, ".npy")
+            file_paths = get_files_of_type(self.path, ".npy", min_ctime=min_ctime)
         print(f"found {len(file_paths)} files")
         with step_timer("filtering files", verbose=PROFILE_LOADING):
             self.label_paths = [p for p in file_paths if "labels" in p]
             INPUT_TYPE = "inputs" if feature_model is None else f"{feature_model}_features"
             self.input_paths = [p for p in file_paths if INPUT_TYPE in p]
+        print(f"found {len(self.input_paths)} input files")
+        print(f"found {len(self.label_paths)} label files")
+        print(self.input_paths[0])
+        print(self.label_paths[0])
         with step_timer("getting dicts", verbose=PROFILE_LOADING):
             self.input_dict, self.label_dict, self.keys = get_dicts_and_common_keys(self.input_paths, self.label_paths)
+        print(f"found {len(self.keys)} common files")
 
     def __len__(self):
         return len(self.keys)
@@ -646,7 +651,7 @@ class DatasetConfig(BaseModel):
     label_type: str
 
 class DatasetBuilder():
-    def __init__(self, path, dataset_name, style, transform=None, precomputed=False, feature_model=None):
+    def __init__(self, path, dataset_name, style, transform=None, precomputed=False, feature_model=None, min_ctime=None):
         self.path = path
         self.set_sliding_window_config(yaml.safe_load(open("config/sliding_style.yml", "r"))[style])
         self.source = get_source(path, dataset_name)
@@ -656,6 +661,8 @@ class DatasetBuilder():
         self.precomputed = precomputed
         if feature_model: assert transform is None, "cannot transform extracted features"
         self.feature_model = feature_model
+        self.min_ctime = min_ctime
+        if self.min_ctime: assert precomputed, "min_ctime only works with precomputed datasets"
 
     def set_sliding_window_config(self, config_dict):
         self.swconfig = SlidingWindowConfig(**config_dict)
@@ -679,7 +686,13 @@ class DatasetBuilder():
     def build(self):
         if self.precomputed: 
             #if precomputed is true, then the sliding style information should be contained in the path
-            return PrecomputedDatasetV2(self.path, self.dsconfig.categories, self.transform, self.feature_model)
+            return PrecomputedDatasetV2(
+                self.path, 
+                self.dsconfig.categories, 
+                self.transform, 
+                self.feature_model,
+                self.min_ctime
+            )
         else: 
             config = {
                 **self.swconfig.model_dump(), 

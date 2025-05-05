@@ -5,7 +5,7 @@ from fish_benchmark.utils import setup_logger
 
 # Example config values (replace with loading from a file if needed)
 TARGETS = ["abby"]
-SLIDING_STYLES = ["frames_w_temp", "sliding_window_w_temp", "sliding_window_w_stride"]
+SLIDING_STYLES = ["frames", "frames_w_temp", "sliding_window", "sliding_window_w_temp", "sliding_window_w_stride"]
 PARALLEL = True
 SAVE_INPUT = False
 
