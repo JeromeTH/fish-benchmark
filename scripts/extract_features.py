@@ -8,10 +8,11 @@ import torch
 from fish_benchmark.utils import setup_logger
 import subprocess
 import argparse
+import shutil
 
-TARGET_MODELS = ['videomae']
+TARGET_MODELS = ['dino', 'videomae']
 TARGET_DATASETS = ['abby']
-SLIDING_STYLES = ['sliding_window', 'sliding_window_w_temp', 'sliding_window_w_stride']
+SLIDING_STYLES = ['frames', 'frames_w_temp', 'sliding_window', 'sliding_window_w_temp', 'sliding_window_w_stride']
 PRECOMPUTED = False
 PARALLEL = True
 
@@ -38,13 +39,14 @@ def get_wrap_command(source, dataset, sliding_style, dest_path, video_id, model,
         f'--source "{source}" --dest_path "{dest_path}" --id "{video_id}" --sliding_style {sliding_style} '
         f'--dataset {dataset} --model {model} --precomputed {precomputed} '
     )
-def get_slurm_submission_command(model, subset_id, dataset, type, wrap_cmd):
-    output_dir = os.path.join(OUT_ROOT, dataset, model, type, subset_id)
+def get_slurm_submission_command(name, output_dir, wrap_cmd):
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
-    out = os.path.join(output_dir, f"{dataset}_{type}_{subset_id}.out")
-    err = os.path.join(output_dir, f"{dataset}_{type}_{subset_id}.err")
+    out = os.path.join(output_dir, "%j.out")
+    err = os.path.join(output_dir, "%j.err")
     command = (
-        f"sbatch -J {dataset}_{type}_{subset_id} "
+        f"sbatch -J {name} "
         f"-o {out} "
         f"-e {err} "
         f"-N 1 -n 1 --get-user-env --requeue --time=infinite "
@@ -52,7 +54,7 @@ def get_slurm_submission_command(model, subset_id, dataset, type, wrap_cmd):
         f"--gres=gpu:1 "
         f'--wrap="{wrap_cmd}"'
     )
-    logger.info(f"Submitted job for {dataset}_{type}_{subset_id} with command: {command}")
+    logger.info(f"Submitted job for {name} with command: {command}")
     return command 
 
 def check_match(sliding_style, model):
@@ -80,7 +82,11 @@ def main():
                         wrap_cmp = get_wrap_command(
                             SUBSET_SOURCE, DATASET, SLIDING_STYLE, FEATURE_DEST, SUBSET, MODEL, PRECOMPUTED
                         )
-                        command = get_slurm_submission_command(MODEL, SUBSET, DATASET, TYPE, wrap_cmp) if PARALLEL else wrap_cmp    
+                        output_dir = os.path.join(OUT_ROOT, DATASET, SLIDING_STYLE, TYPE, SUBSET, MODEL)
+                        submission_name = f'{DATASET}_{SLIDING_STYLE}_{TYPE}_{SUBSET}_{MODEL}'
+                        command = (get_slurm_submission_command(submission_name, output_dir, wrap_cmp) 
+                                   if PARALLEL 
+                                   else wrap_cmp)   
                         subprocess.run(command, shell=True, check=True)
 
 if __name__ == '__main__':

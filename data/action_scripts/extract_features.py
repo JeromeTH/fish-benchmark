@@ -58,9 +58,10 @@ if __name__ == '__main__':
     VIDEO_ID = args.id
     MODEL = args.model
     PRECOMPUTED = True if args.precomputed == 'True' else False
-
+    if os.path.exists(DEST_PATH): shutil.rmtree(DEST_PATH)
+    
     builder = ModelBuilder()
-    model = builder.set_model(MODEL).set_pooling('mean').build()
+    model = builder.set_model(MODEL).build()
     model = model.to(device)
     input_transform = get_input_transform(MODEL)
 
@@ -80,7 +81,7 @@ if __name__ == '__main__':
         pin_memory=True
     )
 
-    if os.path.exists(DEST_PATH): shutil.rmtree(DEST_PATH)
+    
     print(dataset.total_frames)
     print("loaded dataloader")
     for i, (batch_clip, _) in tqdm(enumerate(dataloader)):
