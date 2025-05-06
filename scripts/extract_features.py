@@ -59,9 +59,9 @@ def get_slurm_submission_command(name, output_dir, wrap_cmd):
 
 def check_match(sliding_style, model):
     if sliding_style_config[sliding_style]['is_image_dataset']: 
-        return model_config[model]['type'] == 'image'
+        return model_config[model]['input_ndims'] == 4
     else: 
-        return model_config[model]['type'] == 'video'
+        return model_config[model]['input_ndims'] == 5
 
 def main():
     for DATASET in TARGET_DATASETS:

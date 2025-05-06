@@ -7,7 +7,7 @@ mike:
     'frames_w_temp',
     'sliding_window_w_temp',
     'sliding_window_w_stride',
-    'patched'
+    'fix_patched',
   ]
 
 abby: 

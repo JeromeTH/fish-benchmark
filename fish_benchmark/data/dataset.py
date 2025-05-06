@@ -28,6 +28,8 @@ from torchvision.transforms import ToTensor
 from pydantic import BaseModel
 from typing import Callable, Optional, List 
 import logging
+import torch.nn.functional as F
+import math 
 
 to_tensor = ToTensor()
 PROFILE = False
@@ -205,6 +207,47 @@ class BaseSource:
         raise NotImplementedError("Subclasses should implement this method")
     
 
+class Patcher: 
+    def __init__(self, patch_type, h, w):
+        assert patch_type in ["absolute", "relative"], f"patch_type {patch_type} not recognized"
+        # if patch_type == "absolute": h is the height of each patch, w is the width of each patch
+        # if patch_type == "relative": the full height of the image would be cut into h patches, and the full width of the image would be cut into w patches
+        self.patch_type = patch_type
+        self.h = h
+        self.w = w
+    
+    def pad_to_multiple_np(self, image: np.ndarray, h: int, w: int) -> np.ndarray:
+        """
+        Pads a HWC (Height-Width-Channel) image so that its height is a multiple of h
+        and width is a multiple of w using 0-padding.
+
+        Args:
+            image (np.ndarray): Input image of shape (H, W, C)
+            h (int): Desired height multiple
+            w (int): Desired width multiple
+
+        Returns:
+            np.ndarray: Padded image
+        """
+        H, W, C = image.shape
+        pad_h = (h - H % h) % h
+        pad_w = (w - W % w) % w
+        padding = ((0, pad_h), (0, pad_w), (0, 0))  # Pad bottom and right
+        return np.pad(image, padding, mode='constant', constant_values=0)
+
+    def patch(self, img, h, w):
+        img = self.pad_to_multiple_np(img, h, w)
+        return img.reshape(-1, h, w, img.shape[2])
+    
+    def __call__(self, img):
+        if self.patch_type == "absolute":
+            return self.patch(img, self.h, self.w)
+        elif self.patch_type == "relative":
+            # Split the image into patches
+            h = math.ceil(img.shape[0] / self.h) #h is the 
+            w = math.ceil(img.shape[1] / self.w)
+            return self.patch(img, h, w)
+
 @dataclass
 class BaseSlidingWindowDataset(IterableDataset):
     '''
@@ -222,7 +265,9 @@ class BaseSlidingWindowDataset(IterableDataset):
     categories: list = None, 
     is_image_dataset: bool = False, 
     shuffle: bool = False,
-    patch_grid_dim: int = 1, 
+    patch_type: str = 'relative', 
+    patch_h: int = 1, 
+    patch_w: int = 1,
     temporal_sample_interval: int = 1,
     MAX_BUFFER_SIZE: int = 1000
     total_frames: int = None
@@ -231,12 +276,11 @@ class BaseSlidingWindowDataset(IterableDataset):
         assert self.temporal_sample_interval > 0, f"temporal_sample_interval {self.temporal_sample_interval} should be greater than 0"
         assert self.tolerance_region <= (self.window_size - 1)//2, f"tolerance_region {self.tolerance_region} should be less than or equal to window_size {self.window_size//2}"
         assert self.label_type == "onehot", 'currently only onehot is supported'
-        assert isinstance(self.patch_grid_dim, int), \
-            f"patch_grid_dim should be an int, got {type(self.patch_grid_dim)}"
         assert self.MAX_BUFFER_SIZE > self.window_size, f"MAX_BUFFER_SIZE {self.MAX_BUFFER_SIZE} should be greater than window_size {self.window_size}, otherwise it will not be able to store enough frames"
         if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
         self.image_window_queue = deque([], maxlen=self.window_size)
         self.labels_window_queue = deque([], maxlen=self.window_size)
+        self.patcher = Patcher(self.patch_type, self.patch_h, self.patch_w)
         self.clips = []
         self.labels = []
         self.source = None
@@ -316,31 +360,6 @@ class BaseSlidingWindowDataset(IterableDataset):
         relevant_labels = relevant_labels[:, :len(self.categories)] #drop extra incomplete labels
         unioned_labels = torch.any(relevant_labels.bool(), dim=0)
         return unioned_labels
-
-    def grid_patches(self, img):
-        '''
-        Given an image, return a list of patches based on the grid size.
-        img is a numpy array of shape (H, W, C)
-        '''
-        H, W = img.shape[:2]
-
-        # Compute patch size based on grid
-        patch_h = H // self.patch_grid_dim
-        patch_w = W // self.patch_grid_dim
-
-        patches = []
-
-        for i in range(self.patch_grid_dim):
-            for j in range(self.patch_grid_dim):
-                y1 = i * patch_h
-                y2 = y1 + patch_h
-                x1 = j * patch_w
-                x2 = x1 + patch_w
-
-                patch = img[y1:y2, x1:x2]
-                patches.append(patch)
-
-        return patches
     
     def numpy_to_tensor(self, clip):
         '''
@@ -354,7 +373,7 @@ class BaseSlidingWindowDataset(IterableDataset):
         with step_timer("stacking patches", verbose=PROFILE):
             clip = np.stack([patch 
                             for img in list(self.image_window_queue)[-self.window_size::interval] 
-                            for patch in self.grid_patches(img)])
+                            for patch in self.patcher(img)])
         with step_timer("converting to tensor", verbose=PROFILE):
             tensor_clip = self.numpy_to_tensor(clip)
         with step_timer("applying vision transform", verbose=PROFILE):
@@ -406,7 +425,7 @@ def get_categories(dataset_name):
     if dataset_name == 'ucf101':
         return load_from_cur_dir('ucf101_categories.json')
     elif dataset_name == 'mike':
-        return load_behavior_idx_map('behavior_categories.json')
+        return load_behavior_idx_map('behavior_categories.json').keys()
     elif dataset_name == 'abby':
         return load_from_cur_dir('abby_dset_categories.json')
     else:
@@ -641,7 +660,9 @@ class SlidingWindowConfig(BaseModel):
     step_size: int
     is_image_dataset: bool  
     shuffle:  bool
-    patch_grid_dim: int
+    patch_type: str
+    patch_h: int
+    patch_w: int
     temporal_sample_interval: int
     MAX_BUFFER_SIZE: int
 

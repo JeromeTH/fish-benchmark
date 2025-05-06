@@ -5,7 +5,9 @@ frames:
   step_size: 1
   is_image_dataset: True 
   shuffle:  False
-  patch_grid_dim: 1 
+  patch_type: "relative"
+  patch_h: 1
+  patch_w: 1
   temporal_sample_interval: 2
   MAX_BUFFER_SIZE: 100
 
@@ -16,7 +18,9 @@ frames_w_temp:
   step_size: 1
   is_image_dataset: True 
   shuffle:  False
-  patch_grid_dim: 1 
+  patch_type: "relative"
+  patch_h: 1
+  patch_w: 1
   temporal_sample_interval: 1
   MAX_BUFFER_SIZE: 100
 
@@ -27,7 +31,9 @@ sliding_window:
   step_size: 16
   is_image_dataset: False 
   shuffle: False
-  patch_grid_dim: 1 
+  patch_type: "relative"
+  patch_h: 1
+  patch_w: 1 
   temporal_sample_interval: 2
   MAX_BUFFER_SIZE: 100
 
@@ -39,7 +45,9 @@ sliding_window_w_temp:
   step_size: 16
   is_image_dataset: False 
   shuffle: False
-  patch_grid_dim: 1 
+  patch_type: "relative"
+  patch_h: 1
+  patch_w: 1
   temporal_sample_interval: 1
   MAX_BUFFER_SIZE: 100
 
@@ -50,7 +58,35 @@ sliding_window_w_stride:
   step_size: 32
   is_image_dataset: False 
   shuffle: False
-  patch_grid_dim: 1 
+  patch_type: "relative"
+  patch_h: 1
+  patch_w: 1
+  temporal_sample_interval: 2
+  MAX_BUFFER_SIZE: 100
+
+fix_patched_224: 
+  window_size: 1 
+  tolerance_region: 0
+  samples_per_window: 1 
+  step_size: 1
+  is_image_dataset: False 
+  shuffle:  False
+  patch_type: "absolute"
+  patch_h: 224
+  patch_w: 224
+  temporal_sample_interval: 2
+  MAX_BUFFER_SIZE: 100
+
+fix_patched_518: 
+  window_size: 1 
+  tolerance_region: 0
+  samples_per_window: 1 
+  step_size: 1
+  is_image_dataset: False 
+  shuffle:  False
+  patch_type: "absolute"
+  patch_h: 518
+  patch_w: 518
   temporal_sample_interval: 2
   MAX_BUFFER_SIZE: 100
 
