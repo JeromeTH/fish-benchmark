@@ -7,6 +7,7 @@ from fish_benchmark.utils import frame_id_with_padding, setup_logger
 from tqdm import tqdm
 import numpy as np
 import shutil
+import csv
 
 
 def get_args():
@@ -57,6 +58,9 @@ if __name__ == '__main__':
             
     if SAVE_INPUT: os.makedirs(INPUT_DEST, exist_ok=True)
     os.makedirs(LABEL_DEST, exist_ok=True)
+    tsv_path = os.path.join(LABEL_DEST, f"{ID}.tsv")
+    tsv_file = open(tsv_path, "w", newline='')
+    tsv_writer = csv.writer(tsv_file, delimiter='\t')
     logger.info(f"Saving input to {INPUT_DEST}, label to {LABEL_DEST}")
     TOTAL = len(dataset)
     print(len(dataset))
@@ -64,6 +68,7 @@ if __name__ == '__main__':
         clip_np = clip.clone().cpu().numpy()
         label_np = label.clone().cpu().numpy()
         if SAVE_INPUT: np.save(os.path.join(INPUT_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), clip_np)
-        np.save(os.path.join(LABEL_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), label_np)
-        # if i % 100 == 0:
-        #     logger.info(f"Processed {i}/{TOTAL} clips")
+        tsv_writer.writerow(label_np.tolist())
+        
+    tsv_file.close()
+    logger.info(f"Saved {TOTAL} clips to {INPUT_DEST} and labels to {LABEL_DEST}")

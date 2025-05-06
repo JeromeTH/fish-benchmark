@@ -203,9 +203,8 @@ class BaseSource:
     def __iter__(self):
         raise NotImplementedError("Subclasses should implement this method")
     
-    def labels(self) -> Iterator:
+    def stream(self, only_labels: bool) -> Iterator: 
         raise NotImplementedError("Subclasses should implement this method")
-    
 
 class Patcher: 
     def __init__(self, patch_type, h, w):
@@ -281,9 +280,13 @@ class BaseSlidingWindowDataset(IterableDataset):
         self.image_window_queue = deque([], maxlen=self.window_size)
         self.labels_window_queue = deque([], maxlen=self.window_size)
         self.patcher = Patcher(self.patch_type, self.patch_h, self.patch_w)
+        self.only_labels = False
         self.clips = []
         self.labels = []
         self.source = None
+
+    def set_only_labels(self, only_labels: bool):
+        self.only_labels = only_labels
 
     def set_source(self, source: BaseSource):
         '''
@@ -304,19 +307,28 @@ class BaseSlidingWindowDataset(IterableDataset):
         self.labels = []
 
     def flush(self):
-        if len(self.clips) == 0: 
+        if len(self.labels) == 0: 
             self.clear_buffer()
             return
-        clips = torch.stack(self.clips)
-        labels = torch.stack(self.labels)
-        if self.shuffle: 
-            perm = torch.randperm(len(clips))
-            clips = clips[perm]
-            labels = labels[perm]
         
-        dataset = TensorDataset(clips, labels)
-        for image, label in dataset:
-            yield image, label
+        if not self.only_labels: 
+            clips = torch.stack(self.clips)
+            labels = torch.stack(self.labels)
+            if self.shuffle: 
+                perm = torch.randperm(len(clips))
+                clips = clips[perm]
+                labels = labels[perm]
+            dataset = TensorDataset(clips, labels)
+            for image, label in dataset:
+                yield image, label
+        else: 
+            labels = torch.stack(self.labels)
+            if self.shuffle:
+                perm = torch.randperm(len(labels))
+                labels = labels[perm]
+            for label in labels: 
+                yield (None, label)
+                
         self.clear_buffer()
 
     def is_yielding_idx(self, idx):
@@ -338,15 +350,15 @@ class BaseSlidingWindowDataset(IterableDataset):
         
         with step_timer("converting PIL image to numpy", verbose=PROFILE): 
             #images are converted to tensors from the start as we want to treat clip processing as batch processing using torch.stack
-            self.image_window_queue.append(np.array(image.convert('RGB')))
+            if not self.only_labels: self.image_window_queue.append(np.array(image.convert('RGB')))
             self.labels_window_queue.append(label)
     
         if self.is_yielding_idx(ith_sample):
             #if the calculation of yielding index is correct, then we should have enough images in the window queue
-            assert len(self.image_window_queue) >= self.window_size, f"image buffer should be at least {self.window_size} long"
+            assert len(self.labels_window_queue) >= self.window_size, f"image buffer should be at least {self.window_size} long"
 
             with step_timer("getting latest clip", verbose=PROFILE):
-                self.clips.append(self.get_latest_clip())
+                if not self.only_labels: self.clips.append(self.get_latest_clip())
                 self.labels.append(self.get_latest_label())
 
         if len(self.clips) >= self.MAX_BUFFER_SIZE:
@@ -407,14 +419,14 @@ class BaseSlidingWindowDataset(IterableDataset):
 
     def __iter__(self):
         assert self.source is not None, "source is not set. Please set the source using set_source()"
-        yield from self.scan(self.source)
+        yield from self.scan(self.source.stream(only_labels=self.only_labels))
         yield from self.flush()
 
     def get_summary(self):
         summary = {}
         summary['metadata'] = asdict(self)
         label_count = torch.zeros(len(self.categories))
-        for label in tqdm(self.source.labels()): 
+        for label in tqdm(self.source.stream(only_labels=True)): 
             assert label.shape == (len(self.categories),), f"label shape {label.shape} does not match categories {self.categories}"
             label_count += label
         summary['label_count'] = label_count.tolist()
@@ -473,13 +485,7 @@ class MikeSourceV2(BaseSource):
             total_frames += container.streams.video[0].frames
         return total_frames
     
-    def labels(self):
-        for label_path in self.label_paths:
-            label = np.loadtxt(label_path, delimiter='\t', dtype=int)
-            for i in range(label.shape[0]):
-                yield label[i]
-
-    def __iter__(self):
+    def stream(self, only_labels = False):
         for video_path in self.video_paths:
             video_name = os.path.splitext(os.path.basename(video_path))[0]
             label_path = self.label_dict.get(video_name)
@@ -489,10 +495,15 @@ class MikeSourceV2(BaseSource):
             container = av.open(video_path)
             label = np.loadtxt(label_path, delimiter='\t', dtype=int)
             assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {video_path} does not match number of annotations in {label_path}"
-            for i, frame in enumerate(container.decode(video=0)):
-                yield frame.to_image(), self.annotation_to_label(label[i])
-
-
+            
+            video_frames = container.decode(video=0)
+            for i in range(label.shape[0]):
+                if only_labels:
+                    yield None, self.annotation_to_label(label[i])
+                else: 
+                    frame = next(video_frames)
+                    yield frame.to_image(), self.annotation_to_label(label[i])
+        
 class AbbySource(BaseSource):
     def __init__(self, path):
         self.path = path
@@ -519,13 +530,7 @@ class AbbySource(BaseSource):
             total_frames += container.streams.video[0].frames
         return total_frames
     
-    def labels(self):
-        for label_path in self.label_paths:
-            label = np.loadtxt(label_path, delimiter='\t', dtype=int)
-            for i in range(label.shape[0]):
-                yield label[i]
-    
-    def __iter__(self):
+    def stream(self, only_labels= False):
         for track_path in self.track_paths:
             track_name = os.path.splitext(os.path.basename(track_path))[0]
             label_path = self.label_dict.get(track_name)
@@ -537,8 +542,14 @@ class AbbySource(BaseSource):
             if label.shape[0] != container.streams.video[0].frames:
                 logger.warning(f"Number of frames in {track_path} does not match number of annotations in {label_path}, skipping")
                 continue
-            for i, frame in enumerate(container.decode(video=0)):
-                yield frame.to_image(), self.annotation_to_label(label[i])
+
+            video_frames = container.decode(video=0)
+            for i in range(label.shape[0]):
+                if only_labels:
+                    yield None, self.annotation_to_label(label[i])
+                else: 
+                    frame = next(video_frames)
+                    yield frame.to_image(), self.annotation_to_label(label[i])
 
 def get_dicts_and_common_keys(list1, list2):
     '''
@@ -576,6 +587,13 @@ class UCF101Source(BaseSource):
             container = av.open(self.video_dict[key])
             for i in range(container.streams.video[0].frames):
                 yield self.annotation_to_label(annotation_idx)
+
+    def data(self):
+        for key in self.keys:
+            video_path = self.video_dict[key]
+            container = av.open(video_path)
+            for i, frame in enumerate(container.decode(video=0)):
+                yield frame.to_image()
 
     def __iter__(self):
         for key in self.keys:
@@ -672,7 +690,7 @@ class DatasetConfig(BaseModel):
     label_type: str
 
 class DatasetBuilder():
-    def __init__(self, path, dataset_name, style, transform=None, precomputed=False, feature_model=None, min_ctime=None):
+    def __init__(self, path, dataset_name, style, transform=None, precomputed=False, feature_model=None, min_ctime=None, only_labels=False):
         self.path = path
         self.set_sliding_window_config(yaml.safe_load(open("config/sliding_style.yml", "r"))[style])
         self.source = get_source(path, dataset_name)
@@ -684,12 +702,16 @@ class DatasetBuilder():
         self.feature_model = feature_model
         self.min_ctime = min_ctime
         if self.min_ctime: assert precomputed, "min_ctime only works with precomputed datasets"
+        self.only_labels = only_labels
 
     def set_sliding_window_config(self, config_dict):
         self.swconfig = SlidingWindowConfig(**config_dict)
 
     def set_transform(self, transform):
         self.transform = transform
+
+    def set_only_labels(self, only_labels):
+        self.only_labels = only_labels
 
     def set_dataset_config(self, config_dict):
         self.dsconfig = DatasetConfig(**config_dict)
@@ -722,4 +744,5 @@ class DatasetBuilder():
             }
             dataset = BaseSlidingWindowDataset(**config)
             dataset.set_source(self.source)
+            dataset.set_only_labels(self.only_labels)
             return dataset   

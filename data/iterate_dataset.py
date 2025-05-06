@@ -33,11 +33,12 @@ if __name__ == '__main__':
         style=STYLE,
         precomputed=PRECOMPUTED, 
         feature_model=MODEL,
+        only_labels=False 
     )
     dataset = builder.build()
     # print(dataset.get_summary())
     frame_0, label_0 = next(iter(dataset))
-    print(f"frame shape {frame_0.shape}, label shape {label_0.shape}")
+    print(f" label shape {label_0.shape}")
     for frame, label in tqdm(dataset):
         pass
     
