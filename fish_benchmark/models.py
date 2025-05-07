@@ -238,7 +238,7 @@ class ModelBuilder():
         #dimension check
         if self.classifier and self.model: assert self.classifier_input_dim == self.hidden_size, f"Classifier input dimension {self.classifier_input_dim} does not match model hidden size {self.hidden_size}"
         MODEL = get_pretrained_model(self.model) if self.model else nn.Identity()
-        POOLING = get_pooling(self.pooling, dim=1, hidden_size=self.hidden_size) if self.pooling else nn.Identity()
+        POOLING = get_pooling(self.pooling, dim=1, hidden_size=MODEL.config.hidden_size) if self.pooling else nn.Identity()
         CLASSIFIER = get_classifier(self.classifier_input_dim, self.classifier_output_dim, self.classifier) if self.classifier else nn.Identity()
         return BaseModelV2(MODEL, POOLING, CLASSIFIER)
 

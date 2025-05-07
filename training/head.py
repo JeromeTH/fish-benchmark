@@ -4,7 +4,7 @@ In this file, we want to train the video MAE model for video classification with
 import torch
 import lightning as L
 from fish_benchmark.models import get_input_transform, get_pretrained_model, ModelBuilder
-from fish_benchmark.data.dataset import DatasetBuilder
+from fish_benchmark.data.dataset import DatasetBuilder, MultiLabelBalancedSampler
 from fish_benchmark.litmodule import get_lit_module
 from pytorch_lightning.loggers import WandbLogger
 import wandb
@@ -84,7 +84,7 @@ if __name__ == '__main__':
             precomputed=True, 
             feature_model=MODEL,
         ).build()
-
+        
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, 

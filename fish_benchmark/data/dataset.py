@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader, IterableDataset, TensorDataset
+from torch.utils.data import Dataset, DataLoader, IterableDataset, TensorDataset, Sampler
 import os
 import av
 from fish_benchmark.utils import read_video_pyav, sample_frame_indices
@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from fish_benchmark.utils import get_files_of_type
 from queue import Queue 
 import time
+import random
 from contextlib import contextmanager
 from torchvision import transforms
 import yaml
@@ -689,3 +690,46 @@ class DatasetBuilder():
             dataset = BaseSlidingWindowDataset(**config)
             dataset.set_source(self.source)
             return dataset   
+        
+
+class MultiLabelBalancedSampler(Sampler):
+    def __init__(self, dataset, max_samples_per_class=1000):
+        """
+        Args:
+            dataset: A dataset with a `.label_tensor` attribute of shape [N, C] (multi-hot labels).
+            max_samples_per_class (int): Maximum number of samples to draw for each class per epoch.
+        """
+        if not hasattr(dataset, "label_tensor"):
+            raise ValueError("Dataset must have a `.label_tensor` attribute of shape [N, num_classes]")
+        
+        self.label_tensor = dataset.label_tensor
+        self.num_classes = self.label_tensor.shape[1]
+        self.max_samples_per_class = max_samples_per_class
+        self.class_to_indices = [[] for _ in range(self.num_classes)]
+
+        # Vectorized: collect all (sample_idx, class_idx) pairs
+        idx_class_pairs = torch.nonzero(self.label_tensor, as_tuple=False)
+        for class_id in range(self.num_classes):
+            self.class_to_indices[class_id] = (
+                idx_class_pairs[idx_class_pairs[:, 1] == class_id][:, 0].tolist()
+            )
+
+    def __iter__(self):
+        sampled_indices = []
+
+        for class_id in range(self.num_classes):
+            indices = self.class_to_indices[class_id]
+            if len(indices) >= self.max_samples_per_class:
+                # Randomly sample without replacement
+                sampled = random.sample(indices, self.max_samples_per_class)
+            else:
+                # Oversample with replacement
+                sampled = random.choices(indices, k=self.max_samples_per_class)
+            sampled_indices.extend(sampled)
+
+        # Shuffle to avoid class order bias
+        random.shuffle(sampled_indices)
+        return iter(sampled_indices)
+
+    def __len__(self):
+        return self.max_samples_per_class * self.num_classes
