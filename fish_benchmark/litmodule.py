@@ -67,6 +67,10 @@ class LitBinaryClassifierModule(L.LightningModule):
         for i, f1 in enumerate(f1_per_class):
             self.log(f"{prefix}_f1_class_{i}", f1)
 
+        positives_per_class = y.float().sum(dim=0)
+        for i, count in enumerate(positives_per_class):
+            self.log(f"{prefix}_num_positive_class_{i}", count)
+
         # mAP
         map = multilabel_average_precision(preds, y, num_labels=num_classes, average='macro')
         self.log(f"{prefix}_mAP", map)

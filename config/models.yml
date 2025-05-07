@@ -1,21 +1,44 @@
 videomae: 
-  type: video
+  input_ndims: 5 #batch, time, channel, height, width
+  output_ndims: 3 #batch, ntoken, embed_dim
   sliding_styles: [
     'sliding_window', 
     'sliding_window_w_temp',
     'sliding_window_w_stride',
   ]
 clip: 
-  type: image 
+  input_ndims: 4 #batch, channel, height, width
+  output_ndims: 3 #batch, ntoken, embed_dim
+  sliding_styles: [
+    'frames', 
+    'frames_w_temp',
+  ]
 dino: 
-  type: image
+  input_ndims: 4 #batch, channel, height, width
+  output_ndims: 3 #batch, ntoken, embed_dim
   sliding_styles: [
     'frames', 
     'frames_w_temp',
   ]
 swinv2: 
-  type: image
+  input_ndims: 4 #batch, channel, height, width
+  output_ndims: 3 #batch, ntoken, embed_dim
+  sliding_styles: [
+    'frames', 
+    'frames_w_temp',
+  ]
 timesformer: 
-  type: video
+  input_ndims: 5 #batch, time, channel, height, width
+  output_ndims: 3 #batch, ntoken, embed_dim
+  sliding_styles: [
+    'sliding_window', 
+    'sliding_window_w_temp',
+    'sliding_window_w_stride',
+  ]
+
 multipatch_dino:
-  type: video
+  input_ndims: 5 #batch, patches, channel, height, width
+  output_ndims: 4 #batch, patches, ntoken, embed_dim
+  sliding_styles: [
+    'fix_patched',
+  ]

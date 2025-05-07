@@ -19,6 +19,7 @@ import json
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--classifier", required=True)
+    parser.add_argument("--pooling", required=True)
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--sliding_style", required=True)
     parser.add_argument("--model", required=True)
@@ -27,12 +28,14 @@ def get_args():
     parser.add_argument("--batch_size", default=32)
     parser.add_argument("--shuffle", default=True)
     parser.add_argument("--label_type", default='onehot')
+    parser.add_argument("--min_ctime", default = '1746331200.0')
 
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = get_args()
     CLASSIFIER = args.classifier
+    POOLING = args.pooling
     DATASET = args.dataset
     EPOCHS = args.epochs
     LEARNING_RATE = args.lr
@@ -41,6 +44,7 @@ if __name__ == '__main__':
     SHUFFLE = args.shuffle
     MODEL = args.model
     LABEL_TYPE = args.label_type
+    MIN_CTIME = float(args.min_ctime)
 
     dataset_config = yaml.safe_load(open('config/datasetsv2.yml', 'r'))
     available_gpus = torch.cuda.device_count()
@@ -49,12 +53,13 @@ if __name__ == '__main__':
         project=DATASET,
         entity = "fish-benchmark",
         notes="Using precomputed embeddings",
-        tags=[CLASSIFIER, DATASET, SLIDING_STYLE, MODEL],
+        tags=[CLASSIFIER, POOLING, DATASET, SLIDING_STYLE, MODEL],
         config={"epochs": EPOCHS, 
                 "learning_rate": LEARNING_RATE, 
                 "batch_size": BATCH_SIZE, 
                 "optimizer": "adam", 
                 "classifier": CLASSIFIER, 
+                "pooling": POOLING,
                 "model": MODEL, 
                 "dataset": DATASET, 
                 "sliding_style": SLIDING_STYLE, 
@@ -74,6 +79,7 @@ if __name__ == '__main__':
             transform=None, 
             precomputed=True, 
             feature_model=MODEL,
+            min_ctime=MIN_CTIME,
         ).build()
 
         test_dataset = DatasetBuilder(
@@ -102,9 +108,11 @@ if __name__ == '__main__':
         
         # to get hidden size
         hidden_size = ModelBuilder().set_model(MODEL).get_hidden_size()
-        classifier = ModelBuilder().set_classifier(CLASSIFIER, 
-                                            input_dim=hidden_size, 
-                                            output_dim=len(train_dataset.categories)).build()
+        classifier = (ModelBuilder()
+                      .set_hidden_size(hidden_size)
+                      .set_pooling(POOLING)
+                      .set_classifier(CLASSIFIER, input_dim=hidden_size, output_dim=len(train_dataset.categories))
+                      .build())
         
         checkpoint_callback = ModelCheckpoint(
             monitor="val_loss",

@@ -1,16 +1,32 @@
 mike: 
-  path: '/share/j_sun/jth264/mikev2'
-  precomputed_path: '/share/j_sun/jth264/precomputed/mike'
+  path: '/share/j_sun/jth264/mikev3'
+  precomputed_path: '/share/j_sun/jth264/precomputed/mikev3'
+  splits: [
+    'train',
+    'val',
+    'test',
+  ]
   sliding_styles: [
     'sliding_window',
     'frames',
-    'patched'
+    'frames_w_temp',
+    'sliding_window_w_temp',
+    'sliding_window_w_stride',
+    'fix_patched_224',
   ]
 
 abby: 
-  path: '/share/j_sun/jth264/abby'
-  precomputed_path: '/share/j_sun/jth264/precomputed/abby'
+  path: '/share/j_sun/jth264/abbyv2'
+  precomputed_path: '/share/j_sun/jth264/precomputed/abbyv2'
+  splits: [
+    'train',
+    'val',
+    'test',
+  ]
   sliding_styles: [
-    'sliding_window',
     'frames',
+    'frames_w_temp',
+    'sliding_window',
+    'sliding_window_w_temp',
+    'sliding_window_w_stride',
   ]

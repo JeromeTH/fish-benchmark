@@ -84,12 +84,18 @@ def sample_frame_indices(clip_len, frame_sample_rate, seg_len):
 #     )
 #     return dataset
 
-def get_files_of_type(folder_path, file_type):
+def get_files_of_type(folder_path, file_type, min_ctime = None):
     res = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
             if file.lower().endswith(file_type) and not file.startswith("._"):
-                res.append(os.path.join(root, file))
+                file_path = os.path.join(root, file)
+                if min_ctime is not None: 
+                    ctime = os.path.getctime(file_path)
+                    if ctime < min_ctime:
+                        print(f"File {file_path} has ctime {ctime} < min_ctime {min_ctime}, skipping.")
+                        continue
+                res.append(file_path)
     return res
 
 def extract_annotation_identifier(filename):
@@ -133,18 +139,18 @@ class PriorityQueue:
     def to_list(self):
         return sorted(self._heap)
     
-def setup_logger(name, log_file = None, level=logging.INFO):
+def setup_logger(name, log_file = None, console = True, file = True, level=logging.INFO):
     logger = logging.getLogger(name)
     logger.setLevel(level) 
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    if log_file is None:
-        # Create a console handler
-        handler = logging.StreamHandler()
-    else:
-        handler = logging.FileHandler(log_file)
-    handler.setLevel(level)
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    stream_handler = logging.StreamHandler()
+    file_handler = logging.FileHandler(log_file)
+    stream_handler.setLevel(level)
+    stream_handler.setFormatter(formatter)
+    file_handler.setLevel(level)
+    file_handler.setFormatter(formatter)
+    if console: logger.addHandler(stream_handler)
+    if file: logger.addHandler(file_handler)
     return logger
 
 def frame_id_with_padding(id, padding=8):
