@@ -8,6 +8,7 @@ from tqdm import tqdm
 import numpy as np
 import shutil
 import csv
+import logging
 
 
 def get_args():
@@ -22,10 +23,7 @@ def get_args():
     parser.add_argument("--save_input", default=True)
     return parser.parse_args()
 
-logger = setup_logger(
-    'precompute_sliding_window'
-)
-
+logger = logging.getLogger(__name__)
 if __name__ == '__main__':
     args = get_args()
     SOURCE = args.source
@@ -45,13 +43,13 @@ if __name__ == '__main__':
     if DATASET not in dataset_config:
         raise ValueError(f"The specified dataset is not valid: {DATASET}")
     
-    builder = DatasetBuilder(
+    dataset = DatasetBuilder(
         path = SOURCE, 
         dataset_name = DATASET,
         style= SLIDING_STYLE, 
         only_labels = False if SAVE_INPUT else True
-    )
-    dataset = builder.build()
+    ).build()
+    print(type(dataset))
 
     # Delete old folders if they exist
     if SAVE_INPUT and os.path.exists(INPUT_DEST): shutil.rmtree(INPUT_DEST)
@@ -63,13 +61,15 @@ if __name__ == '__main__':
     tsv_file = open(tsv_path, "w", newline='')
     tsv_writer = csv.writer(tsv_file, delimiter='\t')
     logger.info(f"Saving input to {INPUT_DEST}, label to {LABEL_DEST}")
+    print(dataset.total_frames)
     TOTAL = len(dataset)
     print(len(dataset))
     for i, (clip, label) in tqdm(enumerate(dataset)):
-        clip_np = clip.clone().cpu().numpy()
-        label_np = label.clone().cpu().numpy()
-        if SAVE_INPUT: np.save(os.path.join(INPUT_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), clip_np)
+        label_np = label.clone().cpu().int().numpy()
         tsv_writer.writerow(label_np.tolist())
+        if SAVE_INPUT: 
+            clip_np = clip.clone().cpu().numpy()
+            np.save(os.path.join(INPUT_DEST, f'{ID}_{frame_id_with_padding(i)}.npy'), clip_np)
         
     tsv_file.close()
     logger.info(f"Saved {TOTAL} clips to {INPUT_DEST} and labels to {LABEL_DEST}")

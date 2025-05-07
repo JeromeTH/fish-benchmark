@@ -139,18 +139,18 @@ class PriorityQueue:
     def to_list(self):
         return sorted(self._heap)
     
-def setup_logger(name, log_file = None, level=logging.INFO):
+def setup_logger(name, log_file = None, console = True, file = True, level=logging.INFO):
     logger = logging.getLogger(name)
     logger.setLevel(level) 
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    if log_file is None:
-        # Create a console handler
-        handler = logging.StreamHandler()
-    else:
-        handler = logging.FileHandler(log_file)
-    handler.setLevel(level)
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    stream_handler = logging.StreamHandler()
+    file_handler = logging.FileHandler(log_file)
+    stream_handler.setLevel(level)
+    stream_handler.setFormatter(formatter)
+    file_handler.setLevel(level)
+    file_handler.setFormatter(formatter)
+    if console: logger.addHandler(stream_handler)
+    if file: logger.addHandler(file_handler)
     return logger
 
 def frame_id_with_padding(id, padding=8):

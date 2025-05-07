@@ -9,6 +9,7 @@ from fish_benchmark.utils import setup_logger
 import subprocess
 import argparse
 import shutil
+from submission import get_slurm_submission_command
 
 TARGET_MODELS = ['dino', 'videomae']
 TARGET_DATASETS = ['abby']
@@ -39,23 +40,6 @@ def get_wrap_command(source, dataset, sliding_style, dest_path, video_id, model,
         f'--source "{source}" --dest_path "{dest_path}" --id "{video_id}" --sliding_style {sliding_style} '
         f'--dataset {dataset} --model {model} --precomputed {precomputed} '
     )
-def get_slurm_submission_command(name, output_dir, wrap_cmd):
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
-    os.makedirs(output_dir, exist_ok=True)
-    out = os.path.join(output_dir, "%j.out")
-    err = os.path.join(output_dir, "%j.err")
-    command = (
-        f"sbatch -J {name} "
-        f"-o {out} "
-        f"-e {err} "
-        f"-N 1 -n 1 --get-user-env --requeue --time=infinite "
-        f"--cpus-per-task=4 --mem=256G --partition=gpu "
-        f"--gres=gpu:1 "
-        f'--wrap="{wrap_cmd}"'
-    )
-    logger.info(f"Submitted job for {name} with command: {command}")
-    return command 
 
 def check_match(sliding_style, model):
     if sliding_style_config[sliding_style]['is_image_dataset']: 
@@ -84,7 +68,7 @@ def main():
                         )
                         output_dir = os.path.join(OUT_ROOT, DATASET, SLIDING_STYLE, TYPE, SUBSET, MODEL)
                         submission_name = f'{DATASET}_{SLIDING_STYLE}_{TYPE}_{SUBSET}_{MODEL}'
-                        command = (get_slurm_submission_command(submission_name, output_dir, wrap_cmp) 
+                        command = (get_slurm_submission_command(submission_name, output_dir, wrap_cmp, gpu=1) 
                                    if PARALLEL 
                                    else wrap_cmp)   
                         subprocess.run(command, shell=True, check=True)
