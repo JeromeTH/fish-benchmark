@@ -48,7 +48,8 @@ if __name__ == '__main__':
     builder = DatasetBuilder(
         path = SOURCE, 
         dataset_name = DATASET,
-        style= SLIDING_STYLE
+        style= SLIDING_STYLE, 
+        only_labels = False if SAVE_INPUT else True
     )
     dataset = builder.build()
 
