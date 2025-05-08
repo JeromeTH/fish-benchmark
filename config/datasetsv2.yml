@@ -7,12 +7,12 @@ mike:
     'test',
   ]
   sliding_styles: [
-    'sliding_window',
     'frames',
     'frames_w_temp',
+    'sliding_window',
     'sliding_window_w_temp',
     'sliding_window_w_stride',
-    'fix_patched_224',
+    'fix_patched_518'
   ]
 
 abby: 

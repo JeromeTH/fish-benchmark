@@ -35,6 +35,10 @@ if __name__ == '__main__':
     ID = args.id
     dataset_config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
     
+    # Delete old folders if they exist
+    if SAVE_INPUT and os.path.exists(INPUT_DEST): shutil.rmtree(INPUT_DEST)
+    if os.path.exists(LABEL_DEST): shutil.rmtree(LABEL_DEST)
+
     # Check if the path exists
     if not os.path.exists(SOURCE):
         raise FileNotFoundError(f"The specified path does not exist: {SOURCE}")
@@ -49,21 +53,18 @@ if __name__ == '__main__':
         style= SLIDING_STYLE, 
         only_labels = False if SAVE_INPUT else True
     ).build()
-    print(type(dataset))
-
-    # Delete old folders if they exist
-    if SAVE_INPUT and os.path.exists(INPUT_DEST): shutil.rmtree(INPUT_DEST)
-    if os.path.exists(LABEL_DEST): shutil.rmtree(LABEL_DEST)
-            
+    
+    #make destination folders
     if SAVE_INPUT: os.makedirs(INPUT_DEST, exist_ok=True)
     os.makedirs(LABEL_DEST, exist_ok=True)
+
+    # Create a CSV file for labels
     tsv_path = os.path.join(LABEL_DEST, f"{ID}.tsv")
     tsv_file = open(tsv_path, "w", newline='')
     tsv_writer = csv.writer(tsv_file, delimiter='\t')
+
     logger.info(f"Saving input to {INPUT_DEST}, label to {LABEL_DEST}")
-    print(dataset.total_frames)
     TOTAL = len(dataset)
-    print(len(dataset))
     for i, (clip, label) in tqdm(enumerate(dataset)):
         label_np = label.clone().cpu().int().numpy()
         tsv_writer.writerow(label_np.tolist())

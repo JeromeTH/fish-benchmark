@@ -5,8 +5,16 @@ from fish_benchmark.utils import setup_logger
 from submission import get_slurm_submission_command
 
 # Example config values (replace with loading from a file if needed)
-TARGETS = ["abby", "mike"]
-SLIDING_STYLES = ["frames_w_temp", "sliding_window", "sliding_window_w_temp", "sliding_window_w_stride", "fix_patched_224"]
+TARGETS = ["abby", 
+           "mike"
+        ]
+SLIDING_STYLES = [
+    # "frames_w_temp", 
+    "sliding_window", 
+    "sliding_window_w_temp", 
+    "sliding_window_w_stride", 
+    # "fix_patched_224"
+]
 PARALLEL = True
 SAVE_INPUT = False
 

@@ -269,14 +269,13 @@ class BaseSlidingWindowDataset(IterableDataset):
     patch_h: int = 1, 
     patch_w: int = 1,
     temporal_sample_interval: int = 1,
-    MAX_BUFFER_SIZE: int = 1000
+    MAX_BUFFER_SIZE: int = 100
     total_frames: int = None
     def __post_init__(self):
         assert self.window_size % self.samples_per_window == 0, f"window_size {self.window_size} should be a factor of samples_per_window {self.samples_per_window}"
         assert self.temporal_sample_interval > 0, f"temporal_sample_interval {self.temporal_sample_interval} should be greater than 0"
         assert self.tolerance_region <= (self.window_size - 1)//2, f"tolerance_region {self.tolerance_region} should be less than or equal to window_size {self.window_size//2}"
         assert self.label_type == "onehot", 'currently only onehot is supported'
-        assert self.MAX_BUFFER_SIZE > self.window_size, f"MAX_BUFFER_SIZE {self.MAX_BUFFER_SIZE} should be greater than window_size {self.window_size}, otherwise it will not be able to store enough frames"
         if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
         self.image_window_queue = deque([], maxlen=self.window_size)
         self.labels_window_queue = deque([], maxlen=self.window_size)

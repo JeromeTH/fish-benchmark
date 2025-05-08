@@ -1,4 +1,4 @@
-from fish_benchmark.models import get_pretrained_model, get_input_transform, ModelBuilder
+from fish_benchmark.models import get_input_transform, ModelBuilder
 from fish_benchmark.data.dataset import DatasetBuilder
 import yaml 
 import argparse
@@ -77,12 +77,12 @@ if __name__ == '__main__':
         dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
-        num_workers=4,
         pin_memory=True
     )
 
     
     print(dataset.total_frames)
+    print(len(dataset))
     print("loaded dataloader")
     for i, (batch_clip, _) in tqdm(enumerate(dataloader)):
         #print(f"Processing batch {i + 1}/{len(dataloader)}")

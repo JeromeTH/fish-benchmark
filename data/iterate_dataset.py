@@ -6,7 +6,18 @@ from tqdm import tqdm
 from dataclasses import asdict
 from fish_benchmark.utils import setup_logger 
 import os
+<<<<<<< HEAD
 import torch
+=======
+from torch.utils.data import DataLoader
+
+logger = setup_logger(
+    "iterate_dataset", 
+    "",
+    console=True,
+    file=False,
+)
+>>>>>>> 0839a1ee473ca72479d639fce6f0af0f4c04ef2c
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -37,6 +48,7 @@ if __name__ == '__main__':
     )
 
     dataset = builder.build()
+<<<<<<< HEAD
     sampler = MultiLabelBalancedSampler(dataset)
 
     # === Wrap in DataLoader ===
@@ -69,3 +81,19 @@ if __name__ == '__main__':
         print(f"\n⚠️ Warning: Some classes were never sampled: {empty_classes}")
     else:
         print("\n✅ All classes were sampled at least once.")
+=======
+    # print(dataset.get_summary())
+    frame_0, label_0 = next(iter(dataset))
+    print(f" frame shape {frame_0.shape}")
+    print(f" label shape {label_0.shape}")
+
+    # dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
+    # for batch in dataloader:
+    #     print(batch[0].shape)
+    #     print(batch[1].shape)
+    #     break
+    
+    for frame, label in tqdm(dataset):
+        pass
+    
+>>>>>>> 0839a1ee473ca72479d639fce6f0af0f4c04ef2c
