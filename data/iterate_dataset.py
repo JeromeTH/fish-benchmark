@@ -6,8 +6,14 @@ from tqdm import tqdm
 from dataclasses import asdict
 from fish_benchmark.utils import setup_logger 
 import os
+from torch.utils.data import DataLoader
 
-logger = setup_logger("iterate_dataset")
+logger = setup_logger(
+    "iterate_dataset", 
+    "",
+    console=True,
+    file=False,
+)
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -38,7 +44,15 @@ if __name__ == '__main__':
     dataset = builder.build()
     # print(dataset.get_summary())
     frame_0, label_0 = next(iter(dataset))
+    print(f" frame shape {frame_0.shape}")
     print(f" label shape {label_0.shape}")
+
+    # dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
+    # for batch in dataloader:
+    #     print(batch[0].shape)
+    #     print(batch[1].shape)
+    #     break
+    
     for frame, label in tqdm(dataset):
         pass
     

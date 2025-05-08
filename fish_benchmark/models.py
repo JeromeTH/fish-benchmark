@@ -5,6 +5,8 @@ import lightning as L
 from transformers import AutoImageProcessor, AutoProcessor
 import torch
 from fish_benchmark.data.preprocessors import TorchVisionPreprocessor
+from transformers import AutoConfig
+import yaml
 
 class MeanPooling(nn.Module):
     def __init__(self, dim=1):
@@ -89,33 +91,49 @@ class AttentionBlock(nn.Module):
         attn_output = self.norm2(attn_output)
         output = self.classifier(attn_output.squeeze(1)) # shape: (B, output_dim)
         return output
-    
-class MultipatchDino(nn.Module):
-    '''
-    applies dino model to each patch of the seqence of patches. Behaves like a video model. 
-    '''
-    def __init__(self):
-        super().__init__()
-        self.model = AutoModel.from_pretrained('facebook/dinov2-base')
-        self.config = self.model.config
-
-    def forward(self, x):
-        b, np, c, h, w = x.shape
-        x = x.view(b * np, c, h, w)
-        x = self.model(x).last_hidden_state
-        seq_len, dim = x.shape[1], x.shape[2]
-        x = x.view(b, np * seq_len, dim)
-        return x
 
 class BaseModel(nn.Module):
-    def __init__(self, model):
+    def __init__(self, model_name):
         super().__init__()
-        self.model = model
-        self.config = model.config
+        self.model = self.get_pretrained_model(model_name)
+        self.config = self.model.config
+        self.ioconfig = yaml.safe_load(open("config/models.yml", "r"))[model_name]
+        self.input_ndims = self.ioconfig['input_ndims']
+        self.chunk_size = 128
 
+    def get_pretrained_model(self, model_name):
+        if model_name == 'clip':
+            return CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
+        elif model_name == 'dino':
+            return AutoModel.from_pretrained('facebook/dinov2-base')
+        elif model_name == 'dino_large':
+            return AutoModel.from_pretrained('facebook/dinov2-large')
+        elif model_name == 'videomae':
+            return VideoMAEModel.from_pretrained("MCG-NJU/videomae-base")
+        elif model_name == 'timesformer':
+            return TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400")
+        elif model_name == 'swinv2':
+            return Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
+        else:
+            raise ValueError(f"Unknown model name: {model_name}")
+        
     def forward(self, x):
-        x = self.model(x).last_hidden_state
-        return x
+        assert x.ndim >= self.ioconfig['input_ndims'] + 1, f"Input tensor must have at least {self.ioconfig['input_ndims'] + 1} dimensions, got {x.ndim}"
+        batch_shape = x.shape[: x.ndim - self.input_ndims]
+        input_shape = x.shape[-self.input_ndims:]
+
+        flat_x = x.view(-1, *input_shape)
+        # Unflatten batch dimensions
+        out_list = []
+        for i in range(0, flat_x.shape[0], self.chunk_size):
+            chunk = flat_x[i : i + self.chunk_size]
+            out_chunk = self.model(chunk).last_hidden_state
+            out_list.append(out_chunk)
+
+        out = torch.cat(out_list, dim=0)
+        out_shape = out.shape[1:]  # exclude flattened batch dim
+        out = out.view(*batch_shape, *out_shape)
+        return out
 
 def get_classifier(input_dim, output_dim, type):
     if type == 'mlp':
@@ -136,21 +154,24 @@ def get_pooling(type, dim, hidden_size=None):
     else:
         raise ValueError(f"Unknown pooling type: {type}")
     
-def get_pretrained_model(model_name):
-    if model_name == 'clip':
-        return BaseModel(CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32"))
-    elif model_name == 'dino':
-        return BaseModel(AutoModel.from_pretrained('facebook/dinov2-base'))
-    elif model_name == 'videomae':
-        return BaseModel(VideoMAEModel.from_pretrained("MCG-NJU/videomae-base"))
-    elif model_name == 'timesformer':
-        return BaseModel(TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400"))
-    elif model_name == 'swinv2':
-        return BaseModel(Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256"))
-    elif model_name == 'multipatch_dino':
-        return MultipatchDino()
-    else:
-        raise ValueError(f"Unknown model name: {model_name}")
+# def get_pretrained_model(model_name):
+#     if model_name == 'clip':
+#         return BaseModel(CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32"))
+#     elif model_name == 'dino':
+#         return BaseModel(AutoModel.from_pretrained('facebook/dinov2-base'))
+#     elif model_name == 'dino_large':
+#         return BaseModel(AutoModel.from_pretrained('facebook/dinov2-large'))
+#     elif model_name == 'videomae':
+#         return BaseModel(VideoMAEModel.from_pretrained("MCG-NJU/videomae-base"))
+#     elif model_name == 'videomaev2':
+#         config = AutoConfig.from_pretrained("OpenGVLab/VideoMAEv2-Base", trust_remote_code=True)
+#         return AutoModel.from_pretrained('OpenGVLab/VideoMAEv2-Base', config=config, trust_remote_code=True)
+#     elif model_name == 'timesformer':
+#         return BaseModel(TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400"))
+#     elif model_name == 'swinv2':
+#         return BaseModel(Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256"))
+#     else:
+#         raise ValueError(f"Unknown model name: {model_name}")
 
 def get_input_transform(model_name, do_resize = None):
     if model_name == 'clip':
@@ -162,14 +183,22 @@ def get_input_transform(model_name, do_resize = None):
         # transform = lambda img: processor(img, return_tensors="pt").pixel_values.squeeze(0)
         processor = TorchVisionPreprocessor()
         return processor
-    elif model_name == 'multipatch_dino':
+
+    elif model_name == 'dino_large':
         processor = TorchVisionPreprocessor()
         return processor
+    
     elif model_name == 'videomae':
         # processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
         # transform = lambda video: processor(list(video), return_tensors="pt").pixel_values.squeeze(0)
         processor = TorchVisionPreprocessor()
         return processor
+    
+    # elif model_name == 'videomaev2':
+    #     base_processor = TorchVisionPreprocessor()
+    #     processor = lambda video: base_processor(video).permute(1, 0, 2, 3)  # (T, C, H, W) → (C, T, H, W)
+    #     return processor
+
     elif model_name == 'swinv2':
         image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
         transform = lambda img: image_processor(img.convert("RGB"), return_tensors="pt", do_resize = do_resize).pixel_values.squeeze(0)
@@ -182,7 +211,7 @@ def get_input_transform(model_name, do_resize = None):
         raise ValueError(f"Unknown model name: {model_name}")
 
 
-class BaseModelV2(nn.Module):
+class ComposedModel(nn.Module):
     def __init__(self, backbone, pooling, classifier):
         super().__init__()
         self.freeze = True
@@ -224,7 +253,7 @@ class ModelBuilder():
     
     def set_model(self, model):
         self.model = model
-        self.hidden_size = get_pretrained_model(model).config.hidden_size
+        self.hidden_size = BaseModel(model).config.hidden_size
         return self
     
     def set_pooling(self, pooling):
@@ -240,41 +269,7 @@ class ModelBuilder():
     def build(self):
         #dimension check
         if self.classifier and self.model: assert self.classifier_input_dim == self.hidden_size, f"Classifier input dimension {self.classifier_input_dim} does not match model hidden size {self.hidden_size}"
-        MODEL = get_pretrained_model(self.model) if self.model else nn.Identity()
+        MODEL = BaseModel(self.model) if self.model else nn.Identity()
         POOLING = get_pooling(self.pooling, dim=1, hidden_size=self.hidden_size) if self.pooling else nn.Identity()
         CLASSIFIER = get_classifier(self.classifier_input_dim, self.classifier_output_dim, self.classifier) if self.classifier else nn.Identity()
-        return BaseModelV2(MODEL, POOLING, CLASSIFIER)
-
-
-# class VideoClassifier(nn.Module):
-#     def __init__(self, num_classes, pretrained_model = 'videomae', classifier_type='mlp', freeze_pretrained=True):
-#         super().__init__()
-#         self.model = get_pretrained_model(pretrained_model) 
-#         self.hidden_size = self.model.config.hidden_size
-#         self.num_classes = num_classes
-#         self.classifier = get_classifier(self.hidden_size, num_classes, classifier_type)
-#         if freeze_pretrained:
-#             for param in self.model.parameters():
-#                 param.requires_grad = False
-
-#     def forward(self, x):
-#         last_hidden_state = self.model(x).last_hidden_state
-#         cls_token = last_hidden_state[:, 0, :]  # Extract the [CLS] token
-#         logits = self.classifier(cls_token)
-#         return logits
-
-# class ImageClassifier(nn.Module):
-#     def __init__(self, num_classes, pretrained_model = 'clip', classifier_type='mlp', freeze_pretrained=True):
-#         super().__init__()
-#         self.model = get_pretrained_model(pretrained_model) 
-#         self.hidden_size = self.model.config.hidden_size
-#         self.num_classes = num_classes
-#         self.classifier = get_classifier(self.hidden_size, num_classes, classifier_type)
-#         if freeze_pretrained:
-#             for param in self.model.parameters():
-#                 param.requires_grad = False
-
-#     def forward(self, x):
-#         x = self.model(x).pooler_output
-#         x = self.classifier(x)
-#         return x
+        return ComposedModel(MODEL, POOLING, CLASSIFIER)

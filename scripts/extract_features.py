@@ -11,9 +11,24 @@ import argparse
 import shutil
 from submission import get_slurm_submission_command
 
-TARGET_MODELS = ['dino', 'videomae']
-TARGET_DATASETS = ['abby']
-SLIDING_STYLES = ['frames', 'frames_w_temp', 'sliding_window', 'sliding_window_w_temp', 'sliding_window_w_stride']
+TARGET_MODELS = [
+    'videomae', 
+    'dino', 
+    'dino_large'
+]
+TARGET_DATASETS = [
+    'abby', 'mike'
+]
+SLIDING_STYLES = [
+    'frames',
+    'frames_w_temp',
+    'sliding_window',
+    'sliding_window_w_temp',
+    'sliding_window_w_stride',
+    'fix_patched_518'
+  ]
+
+
 PRECOMPUTED = False
 PARALLEL = True
 
@@ -23,7 +38,12 @@ sliding_style_config = yaml.safe_load(open("config/sliding_style.yml", "r"))
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 OUT_ROOT = os.path.join('logs', 'extract_features')
-logger = setup_logger('extract_features', os.path.join(OUT_ROOT, 'extract_features.log'))
+logger = setup_logger(
+    'extract_features', 
+    os.path.join(OUT_ROOT, 'extract_features.log'), 
+    console=False, 
+    file=True
+)
 
 def get_wrap_command(source, dataset, sliding_style, dest_path, video_id, model, precomputed):
     '''
@@ -41,23 +61,19 @@ def get_wrap_command(source, dataset, sliding_style, dest_path, video_id, model,
         f'--dataset {dataset} --model {model} --precomputed {precomputed} '
     )
 
-def check_match(sliding_style, model):
-    if sliding_style_config[sliding_style]['is_image_dataset']: 
-        return model_config[model]['input_ndims'] == 4
-    else: 
-        return model_config[model]['input_ndims'] == 5
-
 def main():
     for DATASET in TARGET_DATASETS:
         for SLIDING_STYLE in SLIDING_STYLES:
-            for TYPE in ['train', 'test']:
+            for SPLIT in dataset_config[DATASET]['splits']:
                 for MODEL in TARGET_MODELS:
-                    if not check_match(SLIDING_STYLE, MODEL): continue
-                    SOURCE_PATH = (os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, TYPE) 
+                    if SLIDING_STYLE not in dataset_config[DATASET]['sliding_styles']: continue
+                    if SLIDING_STYLE not in model_config[MODEL]['sliding_styles']: continue
+
+                    SOURCE_PATH = (os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, SPLIT) 
                             if PRECOMPUTED 
-                            else os.path.join(dataset_config[DATASET]['path'], TYPE))
+                            else os.path.join(dataset_config[DATASET]['path'], SPLIT))
                     
-                    DEST_PATH = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, TYPE)
+                    DEST_PATH = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, SPLIT)
                     for SUBSET in os.listdir(SOURCE_PATH):
                         SUBSET_PATH = os.path.join(SOURCE_PATH, SUBSET)
                         SUBSET_DEST_PATH = os.path.join(DEST_PATH, SUBSET)
@@ -66,11 +82,12 @@ def main():
                         wrap_cmp = get_wrap_command(
                             SUBSET_SOURCE, DATASET, SLIDING_STYLE, FEATURE_DEST, SUBSET, MODEL, PRECOMPUTED
                         )
-                        output_dir = os.path.join(OUT_ROOT, DATASET, SLIDING_STYLE, TYPE, SUBSET, MODEL)
-                        submission_name = f'{DATASET}_{SLIDING_STYLE}_{TYPE}_{SUBSET}_{MODEL}'
+                        output_dir = os.path.join(OUT_ROOT, DATASET, SLIDING_STYLE, SPLIT, SUBSET, MODEL)
+                        submission_name = f'{DATASET}_{SLIDING_STYLE}_{SPLIT}_{SUBSET}_{MODEL}'
                         command = (get_slurm_submission_command(submission_name, output_dir, wrap_cmp, gpu=1) 
                                    if PARALLEL 
                                    else wrap_cmp)   
+                        logger.info(f"Running command for {submission_name} with command: {command}")
                         subprocess.run(command, shell=True, check=True)
 
 if __name__ == '__main__':

@@ -1,44 +1,53 @@
 videomae: 
-  input_ndims: 5 #batch, time, channel, height, width
-  output_ndims: 3 #batch, ntoken, embed_dim
+  input_ndims: 4 #time, channel, height, width
+  output_ndims: 2 #ntoken, embed_dim
   sliding_styles: [
     'sliding_window', 
     'sliding_window_w_temp',
     'sliding_window_w_stride',
   ]
+  
 clip: 
-  input_ndims: 4 #batch, channel, height, width
-  output_ndims: 3 #batch, ntoken, embed_dim
+  input_ndims: 3 #channel, height, width
+  output_ndims: 2 #ntoken, embed_dim
   sliding_styles: [
     'frames', 
     'frames_w_temp',
-  ]
-dino: 
-  input_ndims: 4 #batch, channel, height, width
-  output_ndims: 3 #batch, ntoken, embed_dim
-  sliding_styles: [
-    'frames', 
-    'frames_w_temp',
-  ]
-swinv2: 
-  input_ndims: 4 #batch, channel, height, width
-  output_ndims: 3 #batch, ntoken, embed_dim
-  sliding_styles: [
-    'frames', 
-    'frames_w_temp',
-  ]
-timesformer: 
-  input_ndims: 5 #batch, time, channel, height, width
-  output_ndims: 3 #batch, ntoken, embed_dim
-  sliding_styles: [
-    'sliding_window', 
-    'sliding_window_w_temp',
-    'sliding_window_w_stride',
   ]
 
-multipatch_dino:
-  input_ndims: 5 #batch, patches, channel, height, width
-  output_ndims: 4 #batch, patches, ntoken, embed_dim
+dino: 
+  input_ndims: 3 #channel, height, width
+  output_ndims: 2 #ntoken, embed_dim
   sliding_styles: [
-    'fix_patched',
+    'frames', 
+    'frames_w_temp',
+    'fix_patched_224', 
+    'fix_patched_518',
+  ]
+
+dino_large: 
+  input_ndims: 3 #channel, height, width
+  output_ndims: 2 #ntoken, embed_dim
+  sliding_styles: [
+    'frames', 
+    'frames_w_temp',
+    'fix_patched_224',
+    'fix_patched_518',
+  ]
+
+swinv2: 
+  input_ndims: 3 #channel, height, width
+  output_ndims: 2 #ntoken, embed_dim
+  sliding_styles: [
+    'frames', 
+    'frames_w_temp',
+  ]
+  
+timesformer: 
+  input_ndims: 4 #time, channel, height, width
+  output_ndims: 2 #ntoken, embed_dim
+  sliding_styles: [
+    'sliding_window', 
+    'sliding_window_w_temp',
+    'sliding_window_w_stride',
   ]
