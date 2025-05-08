@@ -7,42 +7,65 @@ import torch
 from fish_benchmark.data.preprocessors import TorchVisionPreprocessor
 from transformers import AutoConfig
 import yaml
+from abc import ABC, abstractmethod
 
-class MeanPooling(nn.Module):
+
+
+class HasInputNDims(ABC):
+    def get_input_ndims(self):
+        assert hasattr(self, 'input_ndims'), (
+            f"{self.__class__.__name__} must have an 'input_ndims' attribute"
+        )
+        """Return the number of expected input dimensions."""
+        return self.input_ndims
+
+'''
+Pooling classes
+'''
+class MeanPooling(nn.Module, HasInputNDims):
     def __init__(self, dim=1):
         super().__init__()
         self.dim = dim
+        self.input_ndims = 2
 
+    def get_input_ndims(self):
+        return self.input_ndims
+    
     def forward(self, x):
         return x.mean(dim=self.dim)
     
-class MaxPooling(nn.Module):
+class MaxPooling(nn.Module, HasInputNDims):
     def __init__(self, dim=1):
         super().__init__()
         self.dim = dim
+        self.input_ndims = 2
 
     def forward(self, x):
         return x.max(dim=self.dim).values
 
-class AttentionPooling(nn.Module):
+class AttentionPooling(nn.Module, HasInputNDims):
     def __init__(self, embed_dim, num_heads=8):
         super().__init__()
+        self.input_ndims = 2
         self.query_token = nn.Parameter(torch.randn(1, 1, embed_dim))
         self.norm = nn.LayerNorm(embed_dim)
         self.attn = nn.MultiheadAttention(embed_dim, num_heads=num_heads, batch_first=True)
-    
+
     def forward(self, x):
         B = x.size(0)
         q = self.query_token.expand(B, -1, -1)  # [B, 1, D]
         x = self.norm(x)
         attn_out, _ = self.attn(q, x, x)
         return attn_out.squeeze(1)  # [B, D]
-    
-class MLP(nn.Module):
+
+'''
+Classifier classes
+'''
+class MLP(nn.Module, HasInputNDims):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers):
         super().__init__()
+        self.input_ndims = 1
         layers = []
-
         # First layer
         layers.append(nn.Linear(input_dim, hidden_dim))
         layers.append(nn.ReLU())
@@ -56,51 +79,30 @@ class MLP(nn.Module):
         layers.append(nn.Linear(hidden_dim, output_dim))
 
         self.mlp = nn.Sequential(*layers)
-
+    
     def forward(self, x):
         return self.mlp(x)
 
-# class AttentionBlock(nn.Module):
-#     def __init__(self, embed_dim, output_dim):
-#         super().__init__()
-#         self.query = nn.Parameter(torch.randn(1, output_dim, embed_dim))
-#         self.attention = nn.MultiheadAttention(embed_dim, num_heads=1, batch_first=True)
-#         self.head = nn.Linear(embed_dim, 1)
-
-#     def forward(self, last_hidden_state):
-#         batch_size = last_hidden_state.size(0)
-#         query = self.query.expand(batch_size, -1, -1) 
-#         attn_output, _ = self.attention(query, last_hidden_state, last_hidden_state)
-#         output = self.head(attn_output).squeeze(-1)
-#         return output
-    
-class AttentionBlock(nn.Module):
-    def __init__(self, embed_dim, num_classes):
+class Linear(nn.Module, HasInputNDims):
+    def __init__(self, input_dim, output_dim):
         super().__init__()
-        self.query_token = nn.Parameter(torch.randn(1, 1, embed_dim))
-        self.norm1 = nn.LayerNorm(embed_dim)
-        self.attention = nn.MultiheadAttention(embed_dim, num_heads=1, batch_first=True)
-        self.norm2 = nn.LayerNorm(embed_dim)
-        self.classifier = nn.Linear(embed_dim, num_classes)
+        self.input_ndims = 1
+        self.linear = nn.Linear(input_dim, output_dim)
+    
+    def forward(self, x):
+        return self.linear(x)
 
-    def forward(self, last_hidden_state):
-        B = last_hidden_state.size(0)
-        query_token = self.query_token.expand(B, -1, -1)  # (B, 1, D)
-        normed_input = self.norm1(last_hidden_state)  # (B, N, D)
-        attn_output, _ = self.attention(query_token, normed_input, normed_input)
-        attn_output = self.norm2(attn_output)
-        output = self.classifier(attn_output.squeeze(1)) # shape: (B, output_dim)
-        return output
-
-class BaseModel(nn.Module):
+'''
+Backbone classes
+'''
+class BackBoneModel(nn.Module, HasInputNDims):
     def __init__(self, model_name):
         super().__init__()
         self.model = self.get_pretrained_model(model_name)
         self.config = self.model.config
         self.ioconfig = yaml.safe_load(open("config/models.yml", "r"))[model_name]
         self.input_ndims = self.ioconfig['input_ndims']
-        self.chunk_size = 128
-
+    
     def get_pretrained_model(self, model_name):
         if model_name == 'clip':
             return CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
@@ -118,7 +120,57 @@ class BaseModel(nn.Module):
             raise ValueError(f"Unknown model name: {model_name}")
         
     def forward(self, x):
-        assert x.ndim >= self.ioconfig['input_ndims'] + 1, f"Input tensor must have at least {self.ioconfig['input_ndims'] + 1} dimensions, got {x.ndim}"
+        out = self.model(x).last_hidden_state
+        return out
+
+ 
+class PoolerFactory:
+    def __init__(self, pooler_type, dim, hidden_size=None):
+        self.pooler_type = pooler_type
+        self.dim = dim
+        self.hidden_size = hidden_size
+    
+    def build(self):
+        if self.pooler_type == 'mean':
+            return MeanPooling(dim=self.dim)
+        elif self.pooler_type == 'max':
+            return MaxPooling(dim=self.dim)
+        elif self.pooler_type == 'attention':
+            assert self.hidden_size is not None, "Attention pooling requires hidden_size"
+            return AttentionPooling(embed_dim=self.hidden_size)
+        else:
+            raise ValueError(f"Unknown pooling type: {self.pooler_type}")
+
+class ClassifierFactory:
+    def __init__(self, classifier_type, input_dim, output_dim):
+        self.classifier_type = classifier_type
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+
+    def build(self):
+        if self.classifier_type == 'mlp':
+            return MLP(input_dim=self.input_dim, hidden_dim=512, output_dim=self.output_dim, num_layers=2)
+        elif self.classifier_type == 'linear':
+            return Linear(self.input_dim, self.output_dim)
+        else:
+            raise ValueError(f"Unknown classifier type: {self.classifier_type}")
+
+
+class BroadcastableModule(nn.Module):
+    '''
+    A wrapper for models so that they can be broadcasted with multiple batch dimensions. 
+    '''
+    def __init__(self, model: nn.Module):
+        super().__init__()
+        self.model = model
+        assert hasattr(model, 'input_ndims'), (
+            f"{model.__class__.__name__} must have an 'input_ndims' attribute"
+        )
+        self.input_ndims = self.model.input_ndims
+        self.chunk_size = 128
+
+    def forward(self, x):
+        assert x.ndim >= self.input_ndims + 1, f"Input tensor must have at least {self.input_ndims + 1} dimensions, got {x.ndim}"
         batch_shape = x.shape[: x.ndim - self.input_ndims]
         input_shape = x.shape[-self.input_ndims:]
 
@@ -127,7 +179,7 @@ class BaseModel(nn.Module):
         out_list = []
         for i in range(0, flat_x.shape[0], self.chunk_size):
             chunk = flat_x[i : i + self.chunk_size]
-            out_chunk = self.model(chunk).last_hidden_state
+            out_chunk = self.model(chunk)
             out_list.append(out_chunk)
 
         out = torch.cat(out_list, dim=0)
@@ -135,52 +187,8 @@ class BaseModel(nn.Module):
         out = out.view(*batch_shape, *out_shape)
         return out
 
-def get_classifier(input_dim, output_dim, type):
-    if type == 'mlp':
-        return MLP(input_dim=input_dim, hidden_dim=512, output_dim= output_dim, num_layers=2)
-    elif type == 'linear':
-        return nn.Linear(input_dim, output_dim)
-    else:
-        raise ValueError(f"Unknown classifier type: {type}")
-
-def get_pooling(type, dim, hidden_size=None):
-    if type == 'mean':
-        return MeanPooling(dim=dim)
-    elif type == 'max':
-        return MaxPooling(dim=dim)
-    elif type == 'attention':
-        assert hidden_size is not None, "Attention pooling requires hidden_size"
-        return AttentionPooling(embed_dim=hidden_size)
-    else:
-        raise ValueError(f"Unknown pooling type: {type}")
-    
-# def get_pretrained_model(model_name):
-#     if model_name == 'clip':
-#         return BaseModel(CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32"))
-#     elif model_name == 'dino':
-#         return BaseModel(AutoModel.from_pretrained('facebook/dinov2-base'))
-#     elif model_name == 'dino_large':
-#         return BaseModel(AutoModel.from_pretrained('facebook/dinov2-large'))
-#     elif model_name == 'videomae':
-#         return BaseModel(VideoMAEModel.from_pretrained("MCG-NJU/videomae-base"))
-#     elif model_name == 'videomaev2':
-#         config = AutoConfig.from_pretrained("OpenGVLab/VideoMAEv2-Base", trust_remote_code=True)
-#         return AutoModel.from_pretrained('OpenGVLab/VideoMAEv2-Base', config=config, trust_remote_code=True)
-#     elif model_name == 'timesformer':
-#         return BaseModel(TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400"))
-#     elif model_name == 'swinv2':
-#         return BaseModel(Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256"))
-#     else:
-#         raise ValueError(f"Unknown model name: {model_name}")
-
 def get_input_transform(model_name, do_resize = None):
-    if model_name == 'clip':
-        processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
-        transform = lambda img: processor(images=img, return_tensors="pt").pixel_values.squeeze(0)
-        return transform
-    elif model_name == 'dino':
-        # processor = AutoImageProcessor.from_pretrained('facebook/dinov2-base')
-        # transform = lambda img: processor(img, return_tensors="pt").pixel_values.squeeze(0)
+    if model_name == 'dino':
         processor = TorchVisionPreprocessor()
         return processor
 
@@ -189,24 +197,8 @@ def get_input_transform(model_name, do_resize = None):
         return processor
     
     elif model_name == 'videomae':
-        # processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
-        # transform = lambda video: processor(list(video), return_tensors="pt").pixel_values.squeeze(0)
         processor = TorchVisionPreprocessor()
         return processor
-    
-    # elif model_name == 'videomaev2':
-    #     base_processor = TorchVisionPreprocessor()
-    #     processor = lambda video: base_processor(video).permute(1, 0, 2, 3)  # (T, C, H, W) → (C, T, H, W)
-    #     return processor
-
-    elif model_name == 'swinv2':
-        image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
-        transform = lambda img: image_processor(img.convert("RGB"), return_tensors="pt", do_resize = do_resize).pixel_values.squeeze(0)
-        return transform
-    elif model_name == 'timesformer':
-        image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
-        transform = lambda video: processor(list(video), return_tensors="pt").pixel_values.squeeze(0)
-        return transform
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
@@ -253,7 +245,7 @@ class ModelBuilder():
     
     def set_model(self, model):
         self.model = model
-        self.hidden_size = BaseModel(model).config.hidden_size
+        self.hidden_size = BackBoneModel(model).config.hidden_size
         return self
     
     def set_pooling(self, pooling):
@@ -269,7 +261,7 @@ class ModelBuilder():
     def build(self):
         #dimension check
         if self.classifier and self.model: assert self.classifier_input_dim == self.hidden_size, f"Classifier input dimension {self.classifier_input_dim} does not match model hidden size {self.hidden_size}"
-        MODEL = BaseModel(self.model) if self.model else nn.Identity()
-        POOLING = get_pooling(self.pooling, dim=1, hidden_size=self.hidden_size) if self.pooling else nn.Identity()
-        CLASSIFIER = get_classifier(self.classifier_input_dim, self.classifier_output_dim, self.classifier) if self.classifier else nn.Identity()
+        MODEL = BroadcastableModule(BackBoneModel(self.model)) if self.model else nn.Identity()
+        POOLING = BroadcastableModule(PoolerFactory(self.pooling, dim=1, hidden_size=self.hidden_size).build()) if self.pooling else nn.Identity()
+        CLASSIFIER = BroadcastableModule(ClassifierFactory(self.classifier, self.classifier_input_dim, self.classifier_output_dim).build()) if self.classifier else nn.Identity()
         return ComposedModel(MODEL, POOLING, CLASSIFIER)
