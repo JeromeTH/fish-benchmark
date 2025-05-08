@@ -80,9 +80,6 @@ if __name__ == '__main__':
         pin_memory=True
     )
 
-    
-    print(dataset.total_frames)
-    print(len(dataset))
     print("loaded dataloader")
     for i, (batch_clip, _) in tqdm(enumerate(dataloader)):
         #print(f"Processing batch {i + 1}/{len(dataloader)}")

@@ -1,15 +1,16 @@
-import argparse
-from fish_benchmark.data.dataset import DatasetBuilder, MultiLabelBalancedSampler, DataLoader
-import yaml
-from fish_benchmark.models import get_input_transform
-from tqdm import tqdm
-from dataclasses import asdict
-from fish_benchmark.utils import setup_logger 
-import os
-<<<<<<< HEAD
-import torch
-=======
+print("importing torch")
 from torch.utils.data import DataLoader
+import torch
+print("importing fish_benchmark")
+from fish_benchmark.data.dataset import DatasetBuilder, MultiLabelBalancedSampler
+from fish_benchmark.utils import setup_logger 
+from fish_benchmark.models import get_input_transform
+print("importing utilities")
+import yaml
+import argparse
+from tqdm import tqdm
+import os
+print("imported")
 
 logger = setup_logger(
     "iterate_dataset", 
@@ -17,7 +18,6 @@ logger = setup_logger(
     console=True,
     file=False,
 )
->>>>>>> 0839a1ee473ca72479d639fce6f0af0f4c04ef2c
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
     PATH = os.path.join(config[DATASET]['precomputed_path'], STYLE, SPLIT) if PRECOMPUTED else os.path.join(config[DATASET]['path'], SPLIT)
-
+    print("initializing builder")
     builder = DatasetBuilder(
         path=PATH,
         dataset_name=DATASET,
@@ -46,9 +46,8 @@ if __name__ == '__main__':
         feature_model=MODEL,
         only_labels=False 
     )
-
+    print("building dataset")
     dataset = builder.build()
-<<<<<<< HEAD
     sampler = MultiLabelBalancedSampler(dataset)
 
     # === Wrap in DataLoader ===
@@ -81,19 +80,3 @@ if __name__ == '__main__':
         print(f"\n⚠️ Warning: Some classes were never sampled: {empty_classes}")
     else:
         print("\n✅ All classes were sampled at least once.")
-=======
-    # print(dataset.get_summary())
-    frame_0, label_0 = next(iter(dataset))
-    print(f" frame shape {frame_0.shape}")
-    print(f" label shape {label_0.shape}")
-
-    # dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
-    # for batch in dataloader:
-    #     print(batch[0].shape)
-    #     print(batch[1].shape)
-    #     break
-    
-    for frame, label in tqdm(dataset):
-        pass
-    
->>>>>>> 0839a1ee473ca72479d639fce6f0af0f4c04ef2c

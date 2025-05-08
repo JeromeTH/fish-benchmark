@@ -3,7 +3,7 @@ In this file, we want to train the video MAE model for video classification with
 '''
 import torch
 import lightning as L
-from fish_benchmark.models import get_input_transform, get_pretrained_model, ModelBuilder
+from fish_benchmark.models import get_input_transform, ModelBuilder
 from fish_benchmark.data.dataset import DatasetBuilder, MultiLabelBalancedSampler
 from fish_benchmark.litmodule import get_lit_module
 from pytorch_lightning.loggers import WandbLogger
@@ -26,7 +26,7 @@ def get_args():
     parser.add_argument("--epochs", default=50)
     parser.add_argument("--lr", default=.00005)
     parser.add_argument("--batch_size", default=32)
-    parser.add_argument("--shuffle", default=True)
+    parser.add_argument("--shuffle", default=False)
     parser.add_argument("--label_type", default='onehot')
     parser.add_argument("--min_ctime", default = '1746331200.0')
 
@@ -63,7 +63,8 @@ if __name__ == '__main__':
                 "model": MODEL, 
                 "dataset": DATASET, 
                 "sliding_style": SLIDING_STYLE, 
-                "shuffle": SHUFFLE},
+                "shuffle": SHUFFLE, 
+                "sampler": "balanced",},
         dir="./logs"
     ) as run:
         wandb_logger = WandbLogger(
@@ -91,14 +92,15 @@ if __name__ == '__main__':
             feature_model=MODEL,
         ).build()
         
-        train_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=10000)
         print("Data loaded.")
+        train_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=10000)
+        
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, 
             sampler=train_balanced_batch_sampler,
             batch_size=run.config['batch_size'], 
             num_workers=7, 
-            shuffle=run.config['shuffle']
+            shuffle=False
         )
 
         test_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=10000)

@@ -269,12 +269,7 @@ class ModelBuilder():
     def build(self):
         #dimension check
         if self.classifier and self.model: assert self.classifier_input_dim == self.hidden_size, f"Classifier input dimension {self.classifier_input_dim} does not match model hidden size {self.hidden_size}"
-<<<<<<< HEAD
-        MODEL = get_pretrained_model(self.model) if self.model else nn.Identity()
-        POOLING = get_pooling(self.pooling, dim=1, hidden_size=MODEL.config.hidden_size) if self.pooling else nn.Identity()
-=======
         MODEL = BaseModel(self.model) if self.model else nn.Identity()
         POOLING = get_pooling(self.pooling, dim=1, hidden_size=self.hidden_size) if self.pooling else nn.Identity()
->>>>>>> 0839a1ee473ca72479d639fce6f0af0f4c04ef2c
         CLASSIFIER = get_classifier(self.classifier_input_dim, self.classifier_output_dim, self.classifier) if self.classifier else nn.Identity()
         return ComposedModel(MODEL, POOLING, CLASSIFIER)

@@ -17,14 +17,15 @@ TARGET_MODELS = [
     'dino_large'
 ]
 TARGET_DATASETS = [
-    'abby', 'mike'
+    # 'abby', 
+    'mike'
 ]
 SLIDING_STYLES = [
-    'frames',
-    'frames_w_temp',
-    'sliding_window',
-    'sliding_window_w_temp',
-    'sliding_window_w_stride',
+    # 'frames',
+    # 'frames_w_temp',
+    # 'sliding_window',
+    # 'sliding_window_w_temp',
+    # 'sliding_window_w_stride',
     'fix_patched_518'
   ]
 

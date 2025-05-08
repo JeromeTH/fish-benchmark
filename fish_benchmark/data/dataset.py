@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader, IterableDataset, TensorDataset, Sampler
+from torch.utils.data import Dataset, IterableDataset, TensorDataset, Sampler
 import os
 import av
 from fish_benchmark.utils import read_video_pyav, sample_frame_indices
@@ -10,30 +10,22 @@ import webdataset as wds
 import json
 from abc import ABC, abstractmethod
 from fish_benchmark.utils import get_files_of_type
-from queue import Queue 
-import time
 import random
-from contextlib import contextmanager
-from torchvision import transforms
 import yaml
-from fish_benchmark.debug import serialized_size
 from typing import Iterator, Callable, Optional
 from dataclasses import dataclass, asdict
-from itertools import islice
 from math import ceil
 from tqdm import tqdm
 from collections import deque
 from fish_benchmark.debug import step_timer
-from PIL import Image
 from torchvision.transforms import ToTensor
 from pydantic import BaseModel
 from typing import Callable, Optional, List 
 import logging
-import torch.nn.functional as F
 import math 
 
 to_tensor = ToTensor()
-PROFILE = False
+PROFILE = True
 PROFILE_LOADING = True
 logger = logging.getLogger(__name__)
 
@@ -190,6 +182,13 @@ def get_sample_indices(lst_len, clip_len, sample_method = "even-spaced"):
     return indices
 
 class BaseSource:
+    def __iter__(self):
+        raise NotImplementedError("Subclasses should implement this method")
+    
+    def stream(self, only_labels: bool) -> Iterator: 
+        raise NotImplementedError("Subclasses should implement this method")
+
+class BaseConfig: 
     def get_config(self):
         required_attrs = ['categories', 'label_type', 'total_frames']
         for attr in required_attrs:
@@ -201,12 +200,34 @@ class BaseSource:
             'total_frames': self.total_frames
         }
     
-    def __iter__(self):
-        raise NotImplementedError("Subclasses should implement this method")
-    
-    def stream(self, only_labels: bool) -> Iterator: 
-        raise NotImplementedError("Subclasses should implement this method")
+class MikeConfig(BaseConfig):
+    def __init__(self):
+        self.categories = get_categories('mike')
+        self.label_type = "onehot"
+        self.total_frames = None
 
+class AbbyConfig(BaseConfig):
+    def __init__(self):
+        self.categories = get_categories('abby')
+        self.label_type = "onehot"
+        self.total_frames = None
+
+class UCF101Config(BaseConfig):
+    def __init__(self):
+        self.categories = get_categories('ucf101')
+        self.label_type = "onehot"
+        self.total_frames = None
+
+def get_config(dataset_name):
+    if dataset_name == 'ucf101':
+        return UCF101Config()
+    elif dataset_name == 'mike':
+        return MikeConfig()
+    elif dataset_name == 'abby':
+        return AbbyConfig()
+    else:
+        raise ValueError(f"dataset_name {dataset_name} not recognized")
+    
 class Patcher: 
     def __init__(self, patch_type, h, w):
         assert patch_type in ["absolute", "relative"], f"patch_type {patch_type} not recognized"
@@ -284,7 +305,6 @@ class BaseSlidingWindowDataset(IterableDataset):
         self.clips = []
         self.labels = []
         self.source = None
-        self.label_tensor = None
     def set_only_labels(self, only_labels: bool):
         self.only_labels = only_labels
 
@@ -606,7 +626,6 @@ class UCF101Source(BaseSource):
                 yield frame.to_image(), self.annotation_to_label(annotation_idx)
 
 def get_source(path, dataset_name):
-
     if dataset_name == 'ucf101':
         return UCF101Source(path)
     elif dataset_name == 'mike':
@@ -628,28 +647,31 @@ class PrecomputedDatasetV2(Dataset):
         self.transform = transform
         self.categories = categories
         print(self.path)
-        file_paths = get_files_of_type(self.path, ".npy", min_ctime=min_ctime)
-        INPUT_TYPE = "inputs" if feature_model is None else f"{feature_model}_features"
-        self.input_paths = [p for p in file_paths if INPUT_TYPE in p]
-        print(len(self.input_paths))
-        self.label_paths = get_files_of_type(self.path, ".tsv", min_ctime=min_ctime)
-        print(len(self.label_paths))
-        self.label_dict = {os.path.basename(p).split('.')[0]: np.loadtxt(p, delimiter='\t') for p in self.label_paths}
-        self.input_dict = {os.path.basename(p).split('.')[0]: p for p in self.input_paths}
-        self.keys = list(self.input_dict.keys())
+        with step_timer("loading input file paths", verbose=PROFILE):
+            file_paths = get_files_of_type(self.path, ".npy", min_ctime=min_ctime)
+            INPUT_TYPE = "inputs" if feature_model is None else f"{feature_model}_features"
+            self.input_paths = [p for p in file_paths if INPUT_TYPE in p]
+            print(len(self.input_paths))
+        with step_timer("loading label file paths", verbose=PROFILE):
+            self.label_paths = get_files_of_type(self.path, ".tsv", min_ctime=min_ctime)
+            print(len(self.label_paths))
+        with step_timer("creating dictionaries", verbose=PROFILE):
+            self.label_dict = {os.path.basename(p).split('.')[0]: np.loadtxt(p, delimiter='\t') for p in self.label_paths}
+            self.input_dict = {os.path.basename(p).split('.')[0]: p for p in self.input_paths}
+            self.keys = list(self.input_dict.keys())
         print(f"Found {len(self.keys)} clips in {self.path}")
     
         label_list = []
+        with step_timer("loading labels", verbose=PROFILE):
+            for key in self.keys:
+                video_id, frame_id = key.rsplit('_', 1)
+                frame_id = int(frame_id)
+                label = self.label_dict[video_id][frame_id]
+                label_list.append(torch.from_numpy(label))
 
-        for key in self.keys:
-            video_id, frame_id = key.rsplit('_', 1)
-            frame_id = int(frame_id)
-            label = self.label_dict[video_id][frame_id]
-            label_list.append(torch.from_numpy(label))
-
-        # Stack into [N, C] tensor
-        self.label_tensor = torch.stack(label_list).to(torch.uint8)  # or .float() if needed
-        print(f"Label tensor shape: {self.label_tensor.shape}")  # [N, num_classes]
+            # Stack into [N, C] tensor
+            self.label_tensor = torch.stack(label_list).to(torch.uint8)  # or .float() if needed
+            print(f"Label tensor shape: {self.label_tensor.shape}")  # [N, num_classes]
 
     def __len__(self):
         return len(self.keys)
@@ -697,15 +719,15 @@ class SlidingWindowConfig(BaseModel):
 
 class DatasetConfig(BaseModel):
     categories: list
-    total_frames: int
+    total_frames: Optional[int] = None
     label_type: str
 
 class DatasetBuilder():
     def __init__(self, path, dataset_name, style, transform=None, precomputed=False, feature_model=None, min_ctime=None, only_labels=False):
         self.path = path
         self.set_sliding_window_config(yaml.safe_load(open("config/sliding_style.yml", "r"))[style])
-        self.source = get_source(path, dataset_name)
-        self.set_dataset_config(self.source.get_config())
+        if precomputed == False: self.source = get_source(path, dataset_name)
+        self.set_dataset_config(get_config(dataset_name).get_config())
         self.input_transform = None
         self.transform = transform
         self.precomputed = precomputed
