@@ -108,129 +108,154 @@
 # print(f"Total samples drawn: {len(sampled_indices)}")
 
 
-import torch
-from torch.utils.data import Dataset, DataLoader, Sampler
-import time
-from collections import Counter
-import random
-# === Simulate imbalanced multi-label data ===
-NUM_SAMPLES = 100_000
-NUM_CLASSES = 50
-LABELS_PER_SAMPLE = 1
+# import torch
+# from torch.utils.data import Dataset, DataLoader, Sampler
+# import time
+# from collections import Counter
+# import random
+# # === Simulate imbalanced multi-label data ===
+# NUM_SAMPLES = 100_000
+# NUM_CLASSES = 50
+# LABELS_PER_SAMPLE = 1
 
-# Imbalanced label distribution (exponential decay)
-torch.manual_seed(42)
-decay = torch.exp(-torch.linspace(0, 5, NUM_CLASSES))  # sharper exponential decay
-class_probs = decay / decay.sum()
-label_tensor = torch.zeros(NUM_SAMPLES, NUM_CLASSES, dtype=torch.uint8)
-for i in range(NUM_SAMPLES):
-    sampled_classes = torch.multinomial(class_probs, LABELS_PER_SAMPLE, replacement=False)
-    label_tensor[i, sampled_classes] = 1
+# # Imbalanced label distribution (exponential decay)
+# torch.manual_seed(42)
+# decay = torch.exp(-torch.linspace(0, 5, NUM_CLASSES))  # sharper exponential decay
+# class_probs = decay / decay.sum()
+# label_tensor = torch.zeros(NUM_SAMPLES, NUM_CLASSES, dtype=torch.uint8)
+# for i in range(NUM_SAMPLES):
+#     sampled_classes = torch.multinomial(class_probs, LABELS_PER_SAMPLE, replacement=False)
+#     label_tensor[i, sampled_classes] = 1
 
-# === Realistic dataset that returns (data, label) ===
-class MultiLabelDataset(Dataset):
-    def __init__(self, data_tensor, label_tensor):
-        self.data_tensor = data_tensor
-        self.label_tensor = label_tensor
-    def __getitem__(self, idx):
-        return self.data_tensor[idx], self.label_tensor[idx]
-    def __len__(self):
-        return len(self.data_tensor)
+# # === Realistic dataset that returns (data, label) ===
+# class MultiLabelDataset(Dataset):
+#     def __init__(self, data_tensor, label_tensor):
+#         self.data_tensor = data_tensor
+#         self.label_tensor = label_tensor
+#     def __getitem__(self, idx):
+#         return self.data_tensor[idx], self.label_tensor[idx]
+#     def __len__(self):
+#         return len(self.data_tensor)
 
-data_tensor = torch.randn(NUM_SAMPLES, 16)  # dummy 16-dim data
-dataset = MultiLabelDataset(data_tensor, label_tensor)
+# data_tensor = torch.randn(NUM_SAMPLES, 16)  # dummy 16-dim data
+# dataset = MultiLabelDataset(data_tensor, label_tensor)
 
-class MultiLabelBalancedSampler(Sampler):
-    def __init__(self, dataset, max_samples_per_class=1000):
-        """
-        Args:
-            dataset: A dataset with a `.label_tensor` attribute of shape [N, C] (multi-hot labels).
-            max_samples_per_class (int): Maximum number of samples to draw for each class per epoch.
-        """
-        if not hasattr(dataset, "label_tensor"):
-            raise ValueError("Dataset must have a `.label_tensor` attribute of shape [N, num_classes]")
+# class MultiLabelBalancedSampler(Sampler):
+#     def __init__(self, dataset, max_samples_per_class=1000):
+#         """
+#         Args:
+#             dataset: A dataset with a `.label_tensor` attribute of shape [N, C] (multi-hot labels).
+#             max_samples_per_class (int): Maximum number of samples to draw for each class per epoch.
+#         """
+#         if not hasattr(dataset, "label_tensor"):
+#             raise ValueError("Dataset must have a `.label_tensor` attribute of shape [N, num_classes]")
         
-        self.label_tensor = dataset.label_tensor
-        self.num_classes = self.label_tensor.shape[1]
-        self.max_samples_per_class = max_samples_per_class
-        self.class_to_indices = [[] for _ in range(self.num_classes)]
+#         self.label_tensor = dataset.label_tensor
+#         self.num_classes = self.label_tensor.shape[1]
+#         self.max_samples_per_class = max_samples_per_class
+#         self.class_to_indices = [[] for _ in range(self.num_classes)]
 
-        # Vectorized: collect all (sample_idx, class_idx) pairs
-        idx_class_pairs = torch.nonzero(self.label_tensor, as_tuple=False)
-        for class_id in range(self.num_classes):
-            self.class_to_indices[class_id] = (
-                idx_class_pairs[idx_class_pairs[:, 1] == class_id][:, 0].tolist()
-            )
+#         # Vectorized: collect all (sample_idx, class_idx) pairs
+#         idx_class_pairs = torch.nonzero(self.label_tensor, as_tuple=False)
+#         for class_id in range(self.num_classes):
+#             self.class_to_indices[class_id] = (
+#                 idx_class_pairs[idx_class_pairs[:, 1] == class_id][:, 0].tolist()
+#             )
 
-    def __iter__(self):
-        sampled_indices = []
+#     def __iter__(self):
+#         sampled_indices = []
 
-        for class_id in range(self.num_classes):
-            indices = self.class_to_indices[class_id]
-            if len(indices) >= self.max_samples_per_class:
-                # Randomly sample without replacement
-                sampled = random.sample(indices, self.max_samples_per_class)
-            else:
-                # Oversample with replacement
-                sampled = random.choices(indices, k=self.max_samples_per_class)
-            sampled_indices.extend(sampled)
+#         for class_id in range(self.num_classes):
+#             indices = self.class_to_indices[class_id]
+#             if len(indices) >= self.max_samples_per_class:
+#                 # Randomly sample without replacement
+#                 sampled = random.sample(indices, self.max_samples_per_class)
+#             else:
+#                 # Oversample with replacement
+#                 sampled = random.choices(indices, k=self.max_samples_per_class)
+#             sampled_indices.extend(sampled)
 
-        # Shuffle to avoid class order bias
-        random.shuffle(sampled_indices)
-        return iter(sampled_indices)
+#         # Shuffle to avoid class order bias
+#         random.shuffle(sampled_indices)
+#         return iter(sampled_indices)
 
-    def __len__(self):
-        return self.max_samples_per_class * self.num_classes
+#     def __len__(self):
+#         return self.max_samples_per_class * self.num_classes
 
 
-# === Simulate actual data pipeline ===
-sampler = MultiLabelBalancedSampler(dataset)
-loader = DataLoader(dataset, sampler=sampler, batch_size=256, num_workers=0)
+# # === Simulate actual data pipeline ===
+# sampler = MultiLabelBalancedSampler(dataset)
+# loader = DataLoader(dataset, sampler=sampler, batch_size=256, num_workers=0)
 
-# === Count number of times each class was sampled ===
-class_counts = torch.zeros(NUM_CLASSES, dtype=torch.int32)
+# # === Count number of times each class was sampled ===
+# class_counts = torch.zeros(NUM_CLASSES, dtype=torch.int32)
 
-start_time = time.time()
+# start_time = time.time()
 
-for data_batch, label_batch in loader:
-    # Sum over batch dimension to get per-class presence counts
-    class_counts += label_batch.sum(dim=0).int()
+# for data_batch, label_batch in loader:
+#     # Sum over batch dimension to get per-class presence counts
+#     class_counts += label_batch.sum(dim=0).int()
 
-elapsed = time.time() - start_time
+# elapsed = time.time() - start_time
 
-# === Print class sample counts ===
-print(f"\n✅ Pipeline ran in {elapsed:.2f} seconds")
-print("Sample counts per class:")
-for c in range(NUM_CLASSES):
-    print(f"Class {c:2d}: {class_counts[c].item():6d} (expected ~{sampler.max_samples_per_class})")
+# # === Print class sample counts ===
+# print(f"\n✅ Pipeline ran in {elapsed:.2f} seconds")
+# print("Sample counts per class:")
+# for c in range(NUM_CLASSES):
+#     print(f"Class {c:2d}: {class_counts[c].item():6d} (expected ~{sampler.max_samples_per_class})")
 
-# === Print actual dataset imbalance as reference ===
-print("\nOriginal class frequencies:")
-original_class_freq = dataset.label_tensor.sum(dim=0)
-for c in range(NUM_CLASSES):
-    print(f"Class {c:2d}: {original_class_freq[c].item():6d}")
+# # === Print actual dataset imbalance as reference ===
+# print("\nOriginal class frequencies:")
+# original_class_freq = dataset.label_tensor.sum(dim=0)
+# for c in range(NUM_CLASSES):
+#     print(f"Class {c:2d}: {original_class_freq[c].item():6d}")
 
-NUM_EPOCHS = 50
-coverage_tracker = [set() for _ in range(dataset.label_tensor.shape[1])]
+# NUM_EPOCHS = 50
+# coverage_tracker = [set() for _ in range(dataset.label_tensor.shape[1])]
 
-for epoch in range(NUM_EPOCHS):
-    sampler = MultiLabelBalancedSampler(dataset, max_samples_per_class=1000)
-    for idx in sampler:
-        class_ids = torch.nonzero(dataset.label_tensor[idx]).squeeze(-1).tolist()
-        for class_id in class_ids:
-            coverage_tracker[class_id].add(idx)
+# for epoch in range(NUM_EPOCHS):
+#     sampler = MultiLabelBalancedSampler(dataset, max_samples_per_class=1000)
+#     for idx in sampler:
+#         class_ids = torch.nonzero(dataset.label_tensor[idx]).squeeze(-1).tolist()
+#         for class_id in class_ids:
+#             coverage_tracker[class_id].add(idx)
 
-# === Report coverage for each class ===
-print(f"\n📊 Coverage after {NUM_EPOCHS} epochs:")
-for class_id in range(dataset.label_tensor.shape[1]):
-    total = sum(dataset.label_tensor[:, class_id]).item()
-    covered = len(coverage_tracker[class_id])
-    coverage_pct = 100.0 * covered / total if total > 0 else 0.0
-    print(f"Class {class_id:2d}: {covered:5d} / {total:5d} ({coverage_pct:5.1f}%)")
+# # === Report coverage for each class ===
+# print(f"\n📊 Coverage after {NUM_EPOCHS} epochs:")
+# for class_id in range(dataset.label_tensor.shape[1]):
+#     total = sum(dataset.label_tensor[:, class_id]).item()
+#     covered = len(coverage_tracker[class_id])
+#     coverage_pct = 100.0 * covered / total if total > 0 else 0.0
+#     print(f"Class {class_id:2d}: {covered:5d} / {total:5d} ({coverage_pct:5.1f}%)")
 
-# Optional: classes not fully covered
-uncovered = [i for i, s in enumerate(coverage_tracker) if len(s) < sum(dataset.label_tensor[:, i])]
-if uncovered:
-    print(f"\n⚠️ Classes not fully covered after {NUM_EPOCHS} epochs: {uncovered}")
-else:
-    print("\n✅ All class members have been sampled at least once.")
+# # Optional: classes not fully covered
+# uncovered = [i for i, s in enumerate(coverage_tracker) if len(s) < sum(dataset.label_tensor[:, i])]
+# if uncovered:
+#     print(f"\n⚠️ Classes not fully covered after {NUM_EPOCHS} epochs: {uncovered}")
+# else:
+#     print("\n✅ All class members have been sampled at least once.")
+
+import os
+import torch
+import pandas as pd
+
+train_dir = "/share/j_sun/jth264/precomputed/abbyv2/sliding_window/train"
+
+# List all video subdirectories (e.g., GX017045_95, etc.)
+for video_dir in sorted(os.listdir(train_dir)):
+    full_video_path = os.path.join(train_dir, video_dir)
+    if not os.path.isdir(full_video_path):
+        continue  # skip files
+
+    # Path to the TSV label file
+    tsv_path = os.path.join(full_video_path, "labels", f"{video_dir}.tsv")
+    
+    if not os.path.exists(tsv_path):
+        print(f"⚠️ Missing: {tsv_path}")
+        continue
+
+    # Load and convert label tensor
+    df = pd.read_csv(tsv_path, sep='\t', header=None)
+    label_tensor = torch.tensor(df.values, dtype=torch.uint8)
+
+    print(f"{video_dir} → label_tensor shape: {label_tensor.shape}")

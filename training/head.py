@@ -91,16 +91,20 @@ if __name__ == '__main__':
             feature_model=MODEL,
         ).build()
         
+        train_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=10000)
         print("Data loaded.")
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, 
+            sampler=train_balanced_batch_sampler,
             batch_size=run.config['batch_size'], 
             num_workers=7, 
             shuffle=run.config['shuffle']
         )
 
+        test_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=10000)
         test_dataloader = torch.utils.data.DataLoader(
             test_dataset, 
+            sampler=test_balanced_batch_sampler,
             batch_size=run.config['batch_size'], 
             num_workers=7, 
             shuffle=False

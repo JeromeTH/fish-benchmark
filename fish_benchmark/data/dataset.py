@@ -285,7 +285,7 @@ class BaseSlidingWindowDataset(IterableDataset):
         self.clips = []
         self.labels = []
         self.source = None
-
+        self.label_tensor = None
     def set_only_labels(self, only_labels: bool):
         self.only_labels = only_labels
 
@@ -746,6 +746,7 @@ class DatasetBuilder():
             dataset = BaseSlidingWindowDataset(**config)
             dataset.set_source(self.source)
             dataset.set_only_labels(self.only_labels)
+            dataset.label_tensor = self.path()
             return dataset   
         
 
