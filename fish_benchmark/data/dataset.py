@@ -628,22 +628,37 @@ class PrecomputedDatasetV2(Dataset):
         self.path = path
         self.transform = transform
         self.categories = categories
+        print(self.path)
         file_paths = get_files_of_type(self.path, ".npy", min_ctime=min_ctime)
         INPUT_TYPE = "inputs" if feature_model is None else f"{feature_model}_features"
         self.input_paths = [p for p in file_paths if INPUT_TYPE in p]
+        print(len(self.input_paths))
         self.label_paths = get_files_of_type(self.path, ".tsv", min_ctime=min_ctime)
+        print(len(self.label_paths))
         self.label_dict = {os.path.basename(p).split('.')[0]: np.loadtxt(p, delimiter='\t') for p in self.label_paths}
         self.input_dict = {os.path.basename(p).split('.')[0]: p for p in self.input_paths}
         self.keys = list(self.input_dict.keys())
         print(f"Found {len(self.keys)} clips in {self.path}")
+    
+        label_list = []
+
+        for key in self.keys:
+            video_id, frame_id = key.rsplit('_', 1)
+            frame_id = int(frame_id)
+            label = self.label_dict[video_id][frame_id]
+            label_list.append(torch.from_numpy(label))
+
+        # Stack into [N, C] tensor
+        self.label_tensor = torch.stack(label_list).to(torch.uint8)  # or .float() if needed
+        print(f"Label tensor shape: {self.label_tensor.shape}")  # [N, num_classes]
 
     def __len__(self):
         return len(self.keys)
     
     def __getitem__(self, idx):
         key = self.keys[idx]
-        video_id = key.split('_')[:-1]
-        frame_id = int(key.split('_')[-1])
+        video_id, frame_id = key.rsplit('_', 1)
+        frame_id = int(frame_id)
         with step_timer(f"loading {key}", verbose=False):
             input = torch.from_numpy(np.load(self.input_dict[key])).float()
             label = torch.from_numpy(self.label_dict[video_id][frame_id])
@@ -742,7 +757,6 @@ class DatasetBuilder():
             dataset = BaseSlidingWindowDataset(**config)
             dataset.set_source(self.source)
             dataset.set_only_labels(self.only_labels)
-            dataset.label_tensor = self.path()
             return dataset   
         
 
@@ -757,7 +771,9 @@ class MultiLabelBalancedSampler(Sampler):
             raise ValueError("Dataset must have a `.label_tensor` attribute of shape [N, num_classes]")
         
         self.label_tensor = dataset.label_tensor
+        print(self.label_tensor.shape)
         self.num_classes = self.label_tensor.shape[1]
+        print(self.num_classes)
         self.max_samples_per_class = max_samples_per_class
         self.class_to_indices = [[] for _ in range(self.num_classes)]
 
@@ -767,16 +783,19 @@ class MultiLabelBalancedSampler(Sampler):
             self.class_to_indices[class_id] = (
                 idx_class_pairs[idx_class_pairs[:, 1] == class_id][:, 0].tolist()
             )
-
     def __iter__(self):
         sampled_indices = []
 
         for class_id in range(self.num_classes):
             indices = self.class_to_indices[class_id]
+            print(len(indices))
+            if len(indices) == 0:
+                continue  # skip empty classes
             if len(indices) >= self.max_samples_per_class:
                 # Randomly sample without replacement
                 sampled = random.sample(indices, self.max_samples_per_class)
             else:
+
                 # Oversample with replacement
                 sampled = random.choices(indices, k=self.max_samples_per_class)
             sampled_indices.extend(sampled)
