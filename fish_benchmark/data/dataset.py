@@ -628,29 +628,25 @@ class PrecomputedDatasetV2(Dataset):
         self.path = path
         self.transform = transform
         self.categories = categories
-        with step_timer("fetching files", verbose=PROFILE_LOADING):
-            file_paths = get_files_of_type(self.path, ".npy", min_ctime=min_ctime)
-        print(f"found {len(file_paths)} files")
-        with step_timer("filtering files", verbose=PROFILE_LOADING):
-            self.label_paths = [p for p in file_paths if "labels" in p]
-            INPUT_TYPE = "inputs" if feature_model is None else f"{feature_model}_features"
-            self.input_paths = [p for p in file_paths if INPUT_TYPE in p]
-        print(f"found {len(self.input_paths)} input files")
-        print(f"found {len(self.label_paths)} label files")
-        print(self.input_paths[0])
-        print(self.label_paths[0])
-        with step_timer("getting dicts", verbose=PROFILE_LOADING):
-            self.input_dict, self.label_dict, self.keys = get_dicts_and_common_keys(self.input_paths, self.label_paths)
-        print(f"found {len(self.keys)} common files")
+        file_paths = get_files_of_type(self.path, ".npy", min_ctime=min_ctime)
+        INPUT_TYPE = "inputs" if feature_model is None else f"{feature_model}_features"
+        self.input_paths = [p for p in file_paths if INPUT_TYPE in p]
+        self.label_paths = get_files_of_type(self.path, ".tsv", min_ctime=min_ctime)
+        self.label_dict = {os.path.basename(p).split('.')[0]: np.loadtxt(p, delimiter='\t') for p in self.label_paths}
+        self.input_dict = {os.path.basename(p).split('.')[0]: p for p in self.input_paths}
+        self.keys = list(self.input_dict.keys())
+        print(f"Found {len(self.keys)} clips in {self.path}")
 
     def __len__(self):
         return len(self.keys)
     
     def __getitem__(self, idx):
         key = self.keys[idx]
+        video_id = key.split('_')[:-1]
+        frame_id = int(key.split('_')[-1])
         with step_timer(f"loading {key}", verbose=False):
             input = torch.from_numpy(np.load(self.input_dict[key])).float()
-            label = torch.from_numpy(np.load(self.label_dict[key]))
+            label = torch.from_numpy(self.label_dict[video_id][frame_id])
         if self.transform:
             input = self.transform(input)
         return input, label
