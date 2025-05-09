@@ -22,7 +22,7 @@ dino:
     'frames', 
     'frames_w_temp',
     'fix_patched_224', 
-    'fix_patched_518',
+    'fix_patched_512',
   ]
 
 dino_large: 
@@ -32,7 +32,7 @@ dino_large:
     'frames', 
     'frames_w_temp',
     'fix_patched_224',
-    'fix_patched_518',
+    'fix_patched_512',
   ]
 
 swinv2: 

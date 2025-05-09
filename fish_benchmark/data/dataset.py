@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import Dataset, IterableDataset, TensorDataset, Sampler
 import os
 import av
-from fish_benchmark.utils import read_video_pyav, sample_frame_indices
+from fish_benchmark.utils import read_video_pyav, sample_frame_indices, get_first_frame, get_last_frame
 from torchvision.datasets import Caltech101
 from torch.utils.data import Subset
 import webdataset as wds
@@ -25,7 +25,7 @@ import logging
 import math 
 
 to_tensor = ToTensor()
-PROFILE = True
+PROFILE = False
 PROFILE_LOADING = True
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,7 @@ class BaseSource:
     def __iter__(self):
         raise NotImplementedError("Subclasses should implement this method")
     
-    def stream(self, only_labels: bool) -> Iterator: 
+    def stream(self, only_labels: bool, front_padding: int, back_padding: int) -> Iterator: 
         raise NotImplementedError("Subclasses should implement this method")
 
 class BaseConfig: 
@@ -462,31 +462,39 @@ def get_categories(dataset_name):
         return load_from_cur_dir('abby_dset_categories.json')
     else:
         raise ValueError(f"dataset_name {dataset_name} not recognized")
-         
 
-class MikeSource(BaseSource):
-    def __init__(self, path):
+
+class FrameAnnotatedSource(BaseSource):
+    '''
+    Data is stored in a folder with the following structure:
+    /path/to/data/
+        ├── shard1/
+            |videoid1.mp4
+            |videoid1.tsv
+            |videoid2.mp4
+            |videoid2.tsv
+        ├── shard2/
+        │
+    Each row of the tsv files is the annotation for the respective frame in the video
+    Requires: 
+    1. video in the mp4 has the same number of frames as the rows of the tsv file
+    2. vidoes and labels have the same name, except for the extension
+    '''
+    def __init__(self, path, video_file_type, label_file_type, front_padding = 0, back_padding = 0):
+        '''
+        video_file_type example: ".mp4"
+        label_file_type example: ".tsv"
+        make sure the txt file is tab separated. 
+        front_padding and back_padding are the number of frames to pad at the beginning and end of the video. 
+        This is useful when the sliding window using this source wants to sample frames from the beginning and end of the video.
+        '''
         self.path = path
-        self.categories = get_categories('mike')
         self.label_type = "onehot"
-        self.annotation_to_label = lambda x: onehot(len(self.behavior_idx_map), [self.behavior_idx_map[behavior] for behavior in parse_annotation(x)])
-        self.SHARD_SIZE = 1000  
-        self.tar_file_paths = get_files_of_type(self.path, ".tar")
-        self.source = wds.WebDataset(self.tar_file_paths, shardshuffle=False).decode("pil").to_tuple("png", "json")
-        self.total_frames = self.SHARD_SIZE * len(self.tar_file_paths)
-
-    def __iter__(self):
-        for frame, annotation in self.source: 
-            yield frame, self.annotation_to_label(annotation)
-
-class MikeSourceV2(BaseSource):
-    def __init__(self, path):
-        self.path = path
-        self.categories = get_categories('mike')
-        self.label_type = "onehot"
+        self.front_padding = front_padding
+        self.back_padding = back_padding
         self.annotation_to_label = lambda x: torch.tensor(x)
-        self.video_paths = get_files_of_type(self.path, ".mp4")
-        self.label_paths = get_files_of_type(self.path, ".tsv")
+        self.video_paths = get_files_of_type(self.path, video_file_type)
+        self.label_paths = get_files_of_type(self.path, label_file_type)
         self.label_dict = {
             os.path.splitext(os.path.basename(p))[0]: p
             for p in self.label_paths
@@ -503,6 +511,7 @@ class MikeSourceV2(BaseSource):
             
             container = av.open(track_path)
             total_frames += container.streams.video[0].frames
+            total_frames += self.front_padding + self.back_padding
         return total_frames
     
     def stream(self, only_labels = False):
@@ -511,11 +520,20 @@ class MikeSourceV2(BaseSource):
             label_path = self.label_dict.get(video_name)
             if label_path is None:
                 continue
-            
+
+            label = np.loadtxt(label_path, delimiter='\t', dtype=int)
             container = av.open(video_path)
-            label = np.loadtxt(label_path, delimiter='\t', dtype=int)
             assert label.shape[0] == container.streams.video[0].frames, f"Number of frames in {video_path} does not match number of annotations in {label_path}"
+
+            #front padding
+            first_frame = get_first_frame(video_path)
+            for i in range(self.front_padding):
+                if only_labels:
+                    yield None, self.annotation_to_label(label[0])
+                else: 
+                    yield first_frame.to_image(), self.annotation_to_label(label[0])
             
+            #actual frames
             video_frames = container.decode(video=0)
             for i in range(label.shape[0]):
                 if only_labels:
@@ -523,53 +541,14 @@ class MikeSourceV2(BaseSource):
                 else: 
                     frame = next(video_frames)
                     yield frame.to_image(), self.annotation_to_label(label[i])
-        
-class AbbySource(BaseSource):
-    def __init__(self, path):
-        self.path = path
-        self.categories = get_categories('abby')
-        self.label_type = "onehot"
-        self.annotation_to_label = lambda x: torch.tensor(x)
-        self.track_paths = sorted(get_files_of_type(self.path, ".mp4"))
-        self.label_paths = sorted(get_files_of_type(self.path, ".txt"))
-        self.label_dict = {
-            os.path.splitext(os.path.basename(p))[0]: p
-            for p in self.label_paths
-        }
-        self.total_frames = self.calculate_total_frames()
 
-    def calculate_total_frames(self):
-        total_frames = 0
-        for track_path in self.track_paths:
-            track_name = os.path.splitext(os.path.basename(track_path))[0]
-            label_path = self.label_dict.get(track_name)
-            if label_path is None:
-                continue
-            
-            container = av.open(track_path)
-            total_frames += container.streams.video[0].frames
-        return total_frames
-    
-    def stream(self, only_labels= False):
-        for track_path in self.track_paths:
-            track_name = os.path.splitext(os.path.basename(track_path))[0]
-            label_path = self.label_dict.get(track_name)
-            if label_path is None:
-                continue
-            
-            container = av.open(track_path)
-            label = np.loadtxt(label_path, delimiter='\t', dtype=int)
-            if label.shape[0] != container.streams.video[0].frames:
-                logger.warning(f"Number of frames in {track_path} does not match number of annotations in {label_path}, skipping")
-                continue
-
-            video_frames = container.decode(video=0)
-            for i in range(label.shape[0]):
+            #back padding
+            last_frame = get_last_frame(video_path)
+            for i in range(self.back_padding):
                 if only_labels:
-                    yield None, self.annotation_to_label(label[i])
+                    yield None, self.annotation_to_label(label[-1])
                 else: 
-                    frame = next(video_frames)
-                    yield frame.to_image(), self.annotation_to_label(label[i])
+                    yield last_frame.to_image(), self.annotation_to_label(label[-1])
 
 def get_dicts_and_common_keys(list1, list2):
     '''
@@ -580,16 +559,25 @@ def get_dicts_and_common_keys(list1, list2):
     common_keys = list(dict1.keys() & dict2.keys())
     return dict1, dict2, common_keys
 
-class UCF101Source(BaseSource):
-    def __init__(self, path):
+class VideoAnnotatedSource(BaseSource):
+    '''
+    Data is stored in a folder with the following structure:
+    /path/to/data/
+        ├── class1/
+            |videoid1.avi
+            |videoid1.txt
+    txt contains a single number representing the class index
+    '''
+    def __init__(self, path, n_classes, front_padding = 0, back_padding = 0):
         self.path = path
-        self.categories = get_categories('ucf101')
         self.label_type = "onehot"  
-        self.annotation_to_label=lambda x: onehot(len(self.categories), [x])
-        self.video_paths = sorted(get_files_of_type(self.path, ".avi"))
+        self.annotation_to_label=lambda x: onehot(len(n_classes), [x])
+        self.video_paths = sorted(get_files_of_type(self.path, '.avi'))
         self.annotation_paths = sorted(get_files_of_type(self.path, ".txt"))
         self.video_dict, self.annotation_dict, self.keys = get_dicts_and_common_keys(self.video_paths, self.annotation_paths)
         self.total_frames = self.calculate_total_frames()
+        self.front_padding = front_padding
+        self.back_padding = back_padding
 
     def calculate_total_frames(self):
         total_frames = 0
@@ -599,39 +587,96 @@ class UCF101Source(BaseSource):
             total_frames += container.streams.video[0].frames
         return total_frames
 
-    def labels(self):
-        for key in self.keys:
-            annotation_path = self.annotation_dict[key]
-            with open(annotation_path, 'r') as f:
-                annotation_idx = int(f.read().strip())
-            container = av.open(self.video_dict[key])
-            for i in range(container.streams.video[0].frames):
-                yield self.annotation_to_label(annotation_idx)
-
-    def data(self):
-        for key in self.keys:
-            video_path = self.video_dict[key]
-            container = av.open(video_path)
-            for i, frame in enumerate(container.decode(video=0)):
-                yield frame.to_image()
-
-    def __iter__(self):
+    def stream(self, only_labels = False):
         for key in self.keys:
             video_path = self.video_dict[key]
             annotation_path = self.annotation_dict[key]
             with open(annotation_path, 'r') as f:
                 annotation_idx = int(f.read().strip())
-            container = av.open(video_path)
-            for i, frame in enumerate(container.decode(video=0)):
-                yield frame.to_image(), self.annotation_to_label(annotation_idx)
 
-def get_source(path, dataset_name):
-    if dataset_name == 'ucf101':
-        return UCF101Source(path)
-    elif dataset_name == 'mike':
-        return MikeSourceV2(path)
-    elif dataset_name == 'abby':
-        return AbbySource(path)
+            #front padding
+            first_frame = get_first_frame(video_path)
+            for i in range(self.front_padding):
+                if only_labels:
+                    yield None, self.annotation_to_label(annotation_idx)
+                else: 
+                    yield first_frame.to_image(), self.annotation_to_label(annotation_idx)
+
+            #actual frames
+            container = av.open(video_path)
+            video_frames = container.decode(video=0)
+            total_frames = container.streams.video[0].frames
+            for i in range(total_frames):
+                if only_labels:
+                    yield None, self.annotation_to_label(annotation_idx)
+                else: 
+                    frame = next(video_frames)
+                    yield frame.to_image(), self.annotation_to_label(annotation_idx)
+
+            #back padding
+            last_frame = get_last_frame(video_path)
+            for i in range(self.back_padding):
+                if only_labels:
+                    yield None, self.annotation_to_label(annotation_idx)
+                else: 
+                    yield last_frame.to_image(), self.annotation_to_label(annotation_idx)
+
+class SourceFactory: 
+    def __init__(self, path, source_type, video_file_type, label_file_type, front_padding = 0, back_padding = 0, n_classes = None):
+        self.path = path
+        self.source_type = source_type
+        self.front_padding = front_padding
+        self.back_padding = back_padding
+        self.n_classes = n_classes
+        self.video_file_type = video_file_type
+        self.label_file_type = label_file_type
+        self.n_classes = n_classes
+
+    def set_front_padding(self, front_padding):
+        self.front_padding = front_padding
+        return self
+
+    def set_back_padding(self, back_padding):
+        self.back_padding = back_padding
+        return self
+    
+    def build(self):
+        if self.source_type == 'video_annotated':
+            assert self.n_classes is not None, "n_classes should be set for video_annotated source"
+            return VideoAnnotatedSource(self.path, self.n_classes, self.front_padding, self.back_padding)
+        elif self.source_type == 'frame_annotated':
+            return FrameAnnotatedSource(
+                self.path, 
+                self.video_file_type, 
+                self.label_file_type, 
+                self.front_padding, 
+                self.back_padding
+            )
+        
+    @classmethod
+    def from_default(cls, path, dataset_name):
+        if dataset_name == 'ucf101':
+            return cls(
+                path=path,
+                source_type='video_annotated',
+                n_classes=len(get_categories('ucf101'))
+            )
+        elif dataset_name == 'mike':
+            return cls(
+                path=path,
+                source_type='frame_annotated',
+                video_file_type='.mp4',
+                label_file_type='.tsv'
+            )
+        elif dataset_name == 'abby':
+            return cls(
+                path=path,
+                source_type='frame_annotated',
+                video_file_type='.mp4',
+                label_file_type='.txt'
+            )
+        else:
+            raise ValueError(f"dataset_name {dataset_name} not recognized")
 
 class PrecomputedDatasetV2(Dataset):
     '''
@@ -725,8 +770,8 @@ class DatasetConfig(BaseModel):
 class DatasetBuilder():
     def __init__(self, path, dataset_name, style, transform=None, precomputed=False, feature_model=None, min_ctime=None, only_labels=False):
         self.path = path
+        self.dataset_name = dataset_name
         self.set_sliding_window_config(yaml.safe_load(open("config/sliding_style.yml", "r"))[style])
-        if precomputed == False: self.source = get_source(path, dataset_name)
         self.set_dataset_config(get_config(dataset_name).get_config())
         self.input_transform = None
         self.transform = transform
@@ -776,7 +821,13 @@ class DatasetBuilder():
                 'input_transform': self.transform,
             }
             dataset = BaseSlidingWindowDataset(**config)
-            dataset.set_source(self.source)
+            # if the window size is 3, then front and back padding should both be 1 so the number frames equals the number of sliding windows
+            # if the window size is 4, then front padding should be 1 and back padding should be 2 so the number of frames equals the number of sliding windows
+            source = (SourceFactory.from_default(self.path, self.dataset_name)
+                      .set_front_padding((self.swconfig.window_size - 1) // 2)
+                      .set_back_padding((self.swconfig.window_size) // 2) 
+                    ).build() 
+            dataset.set_source(source)
             dataset.set_only_labels(self.only_labels)
             return dataset   
         

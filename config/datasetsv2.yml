@@ -12,7 +12,7 @@ mike:
     'sliding_window',
     'sliding_window_w_temp',
     'sliding_window_w_stride',
-    'fix_patched_518'
+    'fix_patched_512'
   ]
 
 abby: 

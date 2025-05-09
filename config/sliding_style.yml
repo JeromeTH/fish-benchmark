@@ -77,7 +77,7 @@ fix_patched_224:
   temporal_sample_interval: 2
   MAX_BUFFER_SIZE: 1
 
-fix_patched_518: 
+fix_patched_512: 
   window_size: 1 
   tolerance_region: 0
   samples_per_window: 1 
@@ -85,8 +85,8 @@ fix_patched_518:
   is_image_dataset: False 
   shuffle:  False
   patch_type: "absolute"
-  patch_h: 518
-  patch_w: 518
+  patch_h: 512
+  patch_w: 512
   temporal_sample_interval: 2
   MAX_BUFFER_SIZE: 1
 

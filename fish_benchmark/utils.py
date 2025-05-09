@@ -7,6 +7,7 @@ import re
 import logging
 import time
 from contextlib import contextmanager
+import av
 
 def read_video_pyav(container, indices):
     '''
@@ -159,3 +160,17 @@ def setup_logger(name, log_file = None, console = True, file = True, level=loggi
 def frame_id_with_padding(id, padding=8):
     return str(id).zfill(padding)
 
+def get_first_frame(path):
+    container = av.open(path)
+    stream = container.streams.video[0]
+    container.seek(0, stream=stream, any_frame=False, backward=True)
+    return next(container.decode(video=0))
+
+def get_last_frame(path):
+    container = av.open(path)
+    stream = container.streams.video[0]
+    container.seek(stream.duration, stream=stream, any_frame=False, backward=True)
+    last_frame = None
+    for frame in container.decode(video=0):
+        last_frame = frame
+    return last_frame
