@@ -90,13 +90,31 @@ fix_patched_512:
   temporal_sample_interval: 2
   MAX_BUFFER_SIZE: 1
 
-patched: 
+# Sliding styles for the test set
+# Idea: You want the sliding style to be the same regardless of the training style. Specifically, you want to predict 
+# the label for every single frame from a user's perspective.
+test_frames: 
   window_size: 1 
-  tolerance_region: 0
+  tolerance_region: 0 
   samples_per_window: 1 
   step_size: 1
-  is_image_dataset: False 
+  is_image_dataset: True 
   shuffle:  False
-  patch_grid_dim: 2
-  temporal_sample_interval: 2
-  MAX_BUFFER_SIZE: 100
+  patch_type: "relative"
+  patch_h: 1
+  patch_w: 1
+  temporal_sample_interval: 1
+  MAX_BUFFER_SIZE: 1
+
+test_sliding_window:
+  window_size: 16 
+  tolerance_region: 0
+  samples_per_window: 16 
+  step_size: 1
+  is_image_dataset: False 
+  shuffle: False
+  patch_type: "relative"
+  patch_h: 1
+  patch_w: 1 
+  temporal_sample_interval: 1
+  MAX_BUFFER_SIZE: 1

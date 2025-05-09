@@ -1,32 +1,47 @@
 mike: 
   path: '/share/j_sun/jth264/mikev3'
   precomputed_path: '/share/j_sun/jth264/precomputed/mikev3'
-  splits: [
-    'train',
-    'val',
-    'test',
-  ]
-  sliding_styles: [
-    'frames',
-    'frames_w_temp',
-    'sliding_window',
-    'sliding_window_w_temp',
-    'sliding_window_w_stride',
-    'fix_patched_512'
-  ]
+  splits:
+    train:
+      sliding_styles:
+        - frames
+        - frames_w_temp
+        - sliding_window
+        - sliding_window_w_temp
+        - sliding_window_w_stride
+        - fix_patched_512
+    val:
+      sliding_styles:
+        - frames
+        - frames_w_temp
+        - sliding_window
+        - sliding_window_w_temp
+        - sliding_window_w_stride
+        - fix_patched_512
+    test:
+      sliding_styles:
+        - test_frames
+        - test_sliding_window
 
 abby: 
   path: '/share/j_sun/jth264/abbyv2'
   precomputed_path: '/share/j_sun/jth264/precomputed/abbyv2'
-  splits: [
-    'train',
-    'val',
-    'test',
-  ]
-  sliding_styles: [
-    'frames',
-    'frames_w_temp',
-    'sliding_window',
-    'sliding_window_w_temp',
-    'sliding_window_w_stride',
-  ]
+  splits:
+    train:
+      sliding_styles:
+        - frames
+        - frames_w_temp
+        - sliding_window
+        - sliding_window_w_temp
+        - sliding_window_w_stride
+    val:
+      sliding_styles:
+        - frames
+        - frames_w_temp
+        - sliding_window
+        - sliding_window_w_temp
+        - sliding_window_w_stride
+    test:
+      sliding_styles:
+        - test_frames
+        - test_sliding_window

@@ -6,14 +6,16 @@ from submission import get_slurm_submission_command
 
 # Example config values (replace with loading from a file if needed)
 TARGETS = ["abby", 
-           "mike"
-        ]
+           "mike"]
 SLIDING_STYLES = [
-    # "frames_w_temp", 
+    "frames", 
+    "frames_w_temp", 
     "sliding_window", 
     "sliding_window_w_temp", 
     "sliding_window_w_stride", 
-    # "fix_patched_224"
+    "fix_patched_512", 
+    "test_frames", 
+    "test_sliding_window", 
 ]
 PARALLEL = True
 SAVE_INPUT = False
@@ -36,8 +38,8 @@ def get_wrap_cmd(source, input_dest, label_dest, subset, dataset, sliding_style)
 def main():
     for DATASET in TARGETS:
         for SLIDING_STYLE in SLIDING_STYLES:
-            for SPLIT in config[DATASET]['splits']:
-                if SLIDING_STYLE not in config[DATASET]['sliding_styles']: continue
+            for SPLIT in list(config[DATASET]['splits'].keys()):
+                if SLIDING_STYLE not in config[DATASET]['splits'][SPLIT]['sliding_styles']: continue
                 root_dir = os.path.join(config[DATASET]['path'], SPLIT)
                 dest_root_dir = os.path.join(config[DATASET]['precomputed_path'], SLIDING_STYLE, SPLIT)
                 for SUBSET in os.listdir(root_dir):

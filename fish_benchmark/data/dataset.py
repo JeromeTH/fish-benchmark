@@ -190,33 +190,29 @@ class BaseSource:
 
 class BaseConfig: 
     def get_config(self):
-        required_attrs = ['categories', 'label_type', 'total_frames']
+        required_attrs = ['categories', 'label_type']
         for attr in required_attrs:
             if not hasattr(self, attr):
                 raise AttributeError(f"Missing required attribute '{attr}' in {self.__class__.__name__}")
         return {
             'categories': self.categories,
             'label_type': self.label_type,
-            'total_frames': self.total_frames
         }
     
 class MikeConfig(BaseConfig):
     def __init__(self):
         self.categories = get_categories('mike')
         self.label_type = "onehot"
-        self.total_frames = None
 
 class AbbyConfig(BaseConfig):
     def __init__(self):
         self.categories = get_categories('abby')
         self.label_type = "onehot"
-        self.total_frames = None
 
 class UCF101Config(BaseConfig):
     def __init__(self):
         self.categories = get_categories('ucf101')
         self.label_type = "onehot"
-        self.total_frames = None
 
 def get_config(dataset_name):
     if dataset_name == 'ucf101':
@@ -764,7 +760,6 @@ class SlidingWindowConfig(BaseModel):
 
 class DatasetConfig(BaseModel):
     categories: list
-    total_frames: Optional[int] = None
     label_type: str
 
 class DatasetBuilder():
@@ -815,18 +810,19 @@ class DatasetBuilder():
                 self.min_ctime
             )
         else: 
+            source = (SourceFactory.from_default(self.path, self.dataset_name)
+                      .set_front_padding((self.swconfig.window_size - 1) // 2)
+                      .set_back_padding((self.swconfig.window_size) // 2) 
+                    ).build() 
             config = {
                 **self.swconfig.model_dump(), 
                 **self.dsconfig.model_dump(), 
+                'total_frames': source.total_frames, 
                 'input_transform': self.transform,
             }
             dataset = BaseSlidingWindowDataset(**config)
             # if the window size is 3, then front and back padding should both be 1 so the number frames equals the number of sliding windows
             # if the window size is 4, then front padding should be 1 and back padding should be 2 so the number of frames equals the number of sliding windows
-            source = (SourceFactory.from_default(self.path, self.dataset_name)
-                      .set_front_padding((self.swconfig.window_size - 1) // 2)
-                      .set_back_padding((self.swconfig.window_size) // 2) 
-                    ).build() 
             dataset.set_source(source)
             dataset.set_only_labels(self.only_labels)
             return dataset   

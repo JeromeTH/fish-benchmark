@@ -17,18 +17,19 @@ TARGET_MODELS = [
     'dino_large'
 ]
 TARGET_DATASETS = [
-    # 'abby', 
-    'mike'
+    "abby", 
+    "mike"
 ]
 SLIDING_STYLES = [
-    # 'frames',
-    # 'frames_w_temp',
-    # 'sliding_window',
-    # 'sliding_window_w_temp',
-    # 'sliding_window_w_stride',
-    'fix_patched_518'
-  ]
-
+    "frames", 
+    "frames_w_temp", 
+    "sliding_window", 
+    "sliding_window_w_temp", 
+    "sliding_window_w_stride", 
+    "fix_patched_512", 
+    "test_frames", 
+    "test_sliding_window", 
+]
 
 PRECOMPUTED = False
 PARALLEL = True
@@ -65,9 +66,9 @@ def get_wrap_command(source, dataset, sliding_style, dest_path, video_id, model,
 def main():
     for DATASET in TARGET_DATASETS:
         for SLIDING_STYLE in SLIDING_STYLES:
-            for SPLIT in dataset_config[DATASET]['splits']:
+            for SPLIT in list(dataset_config[DATASET]['splits'].keys()):
                 for MODEL in TARGET_MODELS:
-                    if SLIDING_STYLE not in dataset_config[DATASET]['sliding_styles']: continue
+                    if SLIDING_STYLE not in dataset_config[DATASET]['splits'][SPLIT]['sliding_styles']: continue
                     if SLIDING_STYLE not in model_config[MODEL]['sliding_styles']: continue
 
                     SOURCE_PATH = (os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, SPLIT) 
@@ -93,5 +94,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
-
