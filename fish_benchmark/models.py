@@ -22,31 +22,46 @@ class HasInputNDims(ABC):
 '''
 Pooling classes
 '''
-class MeanPooling(nn.Module, HasInputNDims):
-    def __init__(self, dim=1):
+class BasePooler(HasInputNDims):
+    '''
+    A pooler pools [batch, tokens, dim] to [batch, dim]
+    '''
+    def __init__(self):
         super().__init__()
-        self.dim = dim
         self.input_ndims = 2
 
     def get_input_ndims(self):
-        return self.input_ndims
+            return self.input_ndims
+    
+    @abstractmethod
+    def forward(self, x):
+        """
+        Args:
+            x: [batch, tokens, dim]
+        Returns:
+            [batch, dim]
+        """
+        pass
+
+class MeanPooling(BasePooler, nn.Module):
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
     
     def forward(self, x):
         return x.mean(dim=self.dim)
     
-class MaxPooling(nn.Module, HasInputNDims):
+class MaxPooling(BasePooler, nn.Module):
     def __init__(self, dim=1):
         super().__init__()
         self.dim = dim
-        self.input_ndims = 2
 
     def forward(self, x):
         return x.max(dim=self.dim).values
 
-class AttentionPooling(nn.Module, HasInputNDims):
+class AttentionPooling(BasePooler, nn.Module):
     def __init__(self, embed_dim, num_heads=8):
         super().__init__()
-        self.input_ndims = 2
         self.query_token = nn.Parameter(torch.randn(1, 1, embed_dim))
         self.norm = nn.LayerNorm(embed_dim)
         self.attn = nn.MultiheadAttention(embed_dim, num_heads=num_heads, batch_first=True)
@@ -61,10 +76,25 @@ class AttentionPooling(nn.Module, HasInputNDims):
 '''
 Classifier classes
 '''
-class MLP(nn.Module, HasInputNDims):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers):
+class BaseClassifier(HasInputNDims):
+    def __init__(self):
         super().__init__()
         self.input_ndims = 1
+
+    @abstractmethod
+    def forward(self, x):
+        """
+        Args:
+            x: [batch, dim]
+        Returns:
+            [batch, num_classes]
+        """
+        pass
+
+class MLP(BaseClassifier, nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_layers):
+        super().__init__()
+        assert num_layers >= 2, "MLP must have at least 2 layers"
         layers = []
         # First layer
         layers.append(nn.Linear(input_dim, hidden_dim))
@@ -77,16 +107,14 @@ class MLP(nn.Module, HasInputNDims):
 
         # Final layer
         layers.append(nn.Linear(hidden_dim, output_dim))
-
         self.mlp = nn.Sequential(*layers)
     
     def forward(self, x):
         return self.mlp(x)
 
-class Linear(nn.Module, HasInputNDims):
+class Linear(BaseClassifier, nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
-        self.input_ndims = 1
         self.linear = nn.Linear(input_dim, output_dim)
     
     def forward(self, x):

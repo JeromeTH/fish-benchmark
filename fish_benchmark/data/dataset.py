@@ -723,7 +723,7 @@ class PrecomputedDatasetV2(Dataset):
         frame_id = int(frame_id)
         with step_timer(f"loading {key}", verbose=False):
             input = torch.from_numpy(np.load(self.input_dict[key])).float()
-            label = torch.from_numpy(self.label_dict[video_id][frame_id])
+            label = torch.from_numpy(self.label_dict[video_id][frame_id]).int() 
         if self.transform:
             input = self.transform(input)
         return input, label
@@ -735,12 +735,7 @@ class PrecomputedDatasetV2(Dataset):
             'categories': self.categories,
             'label_type': self.label_type
         }
-        label_count = torch.zeros(len(self.categories))
-        for key in self.keys:
-            label = torch.from_numpy(np.load(self.label_dict[key]))
-            assert label.shape == (len(self.categories),), f"label shape {label.shape} does not match categories {self.categories}"
-            label_count += label
-    
+        label_count = self.label_tensor.sum(dim=0)
         summary['label_count'] = label_count.tolist()
         summary['dataset_size'] = len(self)
         return summary
@@ -839,9 +834,9 @@ class MultiLabelBalancedSampler(Sampler):
             raise ValueError("Dataset must have a `.label_tensor` attribute of shape [N, num_classes]")
         
         self.label_tensor = dataset.label_tensor
-        print(self.label_tensor.shape)
+        print(f"label_tensor shape: {self.label_tensor.shape}")
         self.num_classes = self.label_tensor.shape[1]
-        print(self.num_classes)
+        print(f"self.num_classes: {self.num_classes}")
         self.max_samples_per_class = max_samples_per_class
         self.class_to_indices = [[] for _ in range(self.num_classes)]
 
@@ -851,19 +846,17 @@ class MultiLabelBalancedSampler(Sampler):
             self.class_to_indices[class_id] = (
                 idx_class_pairs[idx_class_pairs[:, 1] == class_id][:, 0].tolist()
             )
+        self.non_zero = self.label_tensor.sum(dim=0) > 0
     def __iter__(self):
         sampled_indices = []
 
         for class_id in range(self.num_classes):
             indices = self.class_to_indices[class_id]
-            print(len(indices))
-            if len(indices) == 0:
-                continue  # skip empty classes
+            if not self.non_zero[class_id]: continue
             if len(indices) >= self.max_samples_per_class:
                 # Randomly sample without replacement
                 sampled = random.sample(indices, self.max_samples_per_class)
             else:
-
                 # Oversample with replacement
                 sampled = random.choices(indices, k=self.max_samples_per_class)
             sampled_indices.extend(sampled)
@@ -873,4 +866,4 @@ class MultiLabelBalancedSampler(Sampler):
         return iter(sampled_indices)
 
     def __len__(self):
-        return self.max_samples_per_class * self.num_classes
+        return self.max_samples_per_class * self.non_zero.sum().item()

@@ -47,7 +47,7 @@ def main():
             for POOLING in POOLINGS: 
                 for DATASET in DATASETS:
                     for SLIDING_STYLE in SLIDING_STYLES:
-                        if not SLIDING_STYLE in dataset_config[DATASET]['sliding_styles']: continue
+                        if not SLIDING_STYLE in dataset_config[DATASET]['splits']['train']['sliding_styles']: continue
                         if not SLIDING_STYLE in model_config[MODEL]['sliding_styles']: continue
                         wrap_cmd = get_wrap_cmd(MODEL, CLASSIFIER, POOLING, DATASET, SLIDING_STYLE)
                         OUTPUT_DIR = os.path.join(OUTPUT_BASE, DATASET, SLIDING_STYLE, MODEL, CLASSIFIER)

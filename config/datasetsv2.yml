@@ -22,6 +22,7 @@ mike:
       sliding_styles:
         - test_frames
         - test_sliding_window
+        - test_fix_patched_512
 
 abby: 
   path: '/share/j_sun/jth264/abbyv2'
@@ -45,3 +46,4 @@ abby:
       sliding_styles:
         - test_frames
         - test_sliding_window
+        - test_fix_patched_512

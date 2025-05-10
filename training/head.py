@@ -5,7 +5,7 @@ import torch
 import lightning as L
 from fish_benchmark.models import get_input_transform, ModelBuilder
 from fish_benchmark.data.dataset import DatasetBuilder, MultiLabelBalancedSampler
-from fish_benchmark.litmodule import get_lit_module
+from fish_benchmark.litmodule import LitBinaryClassifierModule
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 import yaml
@@ -72,7 +72,7 @@ if __name__ == '__main__':
             save_dir="./logs",
             log_model="best"
         )
-        print("Loading data...")
+        print("Loading train data...")
         train_dataset = DatasetBuilder(
             path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'train'), 
             dataset_name = DATASET,
@@ -82,9 +82,9 @@ if __name__ == '__main__':
             feature_model=MODEL,
             min_ctime=MIN_CTIME,
         ).build()
-
-        test_dataset = DatasetBuilder(
-            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'test'), 
+        print("Loading val data...")
+        val_dataset = DatasetBuilder(
+            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'val'), 
             dataset_name = DATASET,
             style=SLIDING_STYLE,
             transform=None, 
@@ -103,10 +103,10 @@ if __name__ == '__main__':
             shuffle=False
         )
 
-        test_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=10000)
-        test_dataloader = torch.utils.data.DataLoader(
-            test_dataset, 
-            sampler=test_balanced_batch_sampler,
+        val_balanced_batch_sampler = MultiLabelBalancedSampler(val_dataset, max_samples_per_class=10000)
+        val_dataloader = torch.utils.data.DataLoader(
+            val_dataset, 
+            sampler=val_balanced_batch_sampler,
             batch_size=run.config['batch_size'], 
             num_workers=7, 
             shuffle=False
@@ -128,14 +128,15 @@ if __name__ == '__main__':
             filename="best-{epoch:02d}-{val_loss:.2f}",
         )
 
-        lit_module = get_lit_module(classifier, learning_rate=run.config['learning_rate'], label_type=LABEL_TYPE)
+        lit_module = LitBinaryClassifierModule(classifier, learning_rate = run.config['learning_rate'], optimizer = run.config['optimizer'])
         tqdm_disable = not sys.stdout.isatty()
         print(f"Are we in an interactive terminal? {not tqdm_disable}")
         trainer = L.Trainer(max_epochs=run.config['epochs'], 
                             logger=wandb_logger, 
                             log_every_n_steps= 50, 
-                            callbacks=[checkpoint_callback])
+                            callbacks=[checkpoint_callback], 
+                            check_val_every_n_epoch = 1)
         
-        trainer.fit(lit_module, train_dataloader, test_dataloader)
+        trainer.fit(lit_module, train_dataloader, val_dataloader)
         log_best_model(checkpoint_callback, run)
-        #log_dataset_summary(train_dataset, run)
+        log_dataset_summary(train_dataset, run)

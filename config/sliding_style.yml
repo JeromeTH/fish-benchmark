@@ -118,3 +118,16 @@ test_sliding_window:
   patch_w: 1 
   temporal_sample_interval: 1
   MAX_BUFFER_SIZE: 1
+
+test_fix_patched_512: 
+  window_size: 1 
+  tolerance_region: 0
+  samples_per_window: 1 
+  step_size: 1
+  is_image_dataset: False 
+  shuffle:  False
+  patch_type: "absolute"
+  patch_h: 512
+  patch_w: 512
+  temporal_sample_interval: 1
+  MAX_BUFFER_SIZE: 1

@@ -9,25 +9,7 @@ from torchmetrics.functional.classification import (
 )
 class LitBinaryClassifierModule(L.LightningModule):
     '''
-    subclasses have to have a model component and a classifier component
-    models that are wrapped in this module should have a model component and a classifier head 
-    named "model" and "classifier" respectively. 
-    ex. 
-    class MyModel(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.model = nn.Sequential(
-                nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
-                nn.ReLU(),
-                nn.MaxPool2d(kernel_size=2, stride=2)
-            )
-            self.classifier = nn.Sequential(
-                nn.Linear(16 * 112 * 112, 256),
-                nn.ReLU(),
-                nn.Linear(256, 1)
-            )
-            ...
-    The labels for the dataset should be a one-hot encoding indicating whether each class is present or not.
+    trains a model multi-label classification task
     '''
     def __init__(self, model, learning_rate=1e-4, optimizer = 'adam', weight_decay = 0.001):
         super().__init__()
@@ -82,11 +64,7 @@ class LitBinaryClassifierModule(L.LightningModule):
     def shared_step(self, batch, prefix):
         x, y = batch
         logits = self.model(x)
-        # proportion_0 = (y == 0).sum().float() / (y>=0).sum().clamp(min=1)
-        # proportion_1 = (y == 1).sum().float() / (y >=0).sum().clamp(min=1)
-        # weights = torch.where(y == 1, proportion_1, proportion_0)
         probs = torch.sigmoid(logits)
-        #print(weights.shape)
         loss = F.binary_cross_entropy(probs, y.float(), weight=None)
         self.log(f'{prefix}_loss', loss)
         preds = (probs > 0.5).float()
@@ -106,14 +84,7 @@ class LitBinaryClassifierModule(L.LightningModule):
     def configure_optimizers(self):
         learning_rate = self.hparams.learning_rate
         weight_decay = self.hparams.weight_decay
-
-        model_param = [param for name, param in self.model.named_parameters() if 'model' in name]
-        classifier_param = [param for name, param in self.model.named_parameters() if 'classifier' in name]
-        optimizer = torch.optim.AdamW([{'params': model_param},
-                                   {'params': classifier_param,
-                                    'lr': learning_rate * 10}],
-                                lr=learning_rate, weight_decay=0.001)
-        return optimizer
+        return torch.optim.AdamW(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
 class LitCategoricalClassifierModule(L.LightningModule):
     '''
@@ -143,18 +114,5 @@ class LitCategoricalClassifierModule(L.LightningModule):
 
     def configure_optimizers(self):
         learning_rate = self.hparams.learning_rate
-        model_param = [param for name, param in self.model.named_parameters() if 'model' in name]
-        classifier_param = [param for name, param in self.model.named_parameters() if 'classifier' in name]
-        optimizer = torch.optim.AdamW([{'params': model_param},
-                                   {'params': classifier_param,
-                                    'lr': learning_rate * 10}],
-                                lr=learning_rate, weight_decay=0.001)
-        return optimizer
-    
-def get_lit_module(model, learning_rate, label_type):
-    if label_type == 'onehot':
-        return LitBinaryClassifierModule(model, learning_rate, optimizer='adam')
-    elif label_type == 'categorical':
-        return LitCategoricalClassifierModule(model, learning_rate, optimizer='adam')
-    else:
-        raise ValueError(f"Unknown label type: {label_type}")
+        weight_decay = self.hparams.weight_decay
+        return torch.optim.AdamW(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
