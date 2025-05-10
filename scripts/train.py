@@ -2,38 +2,46 @@ import subprocess
 import os
 import yaml
 from submission import get_slurm_submission_command
+from fish_benchmark.utils import setup_logger
 
 #arguments of the file to run
 # python training/head.py --classifier mlp --dataset abby --sliding_style frames --model dino
 
 MODELS = [
     'dino', 
-    # 'dino_large',
-    # 'videomae'
+    'dino_large',
+    'videomae'
 ]
 CLASSIFIERS = [
     'mlp'
 ]
 POOLINGS = [
     'mean', 
-    # 'attention'
+    'attention'
 ]
 DATASETS = [
-    # 'abby', 
+    'abby', 
     'mike'
 ]
 SLIDING_STYLES = [
-    # 'frames', 
-    # 'frames_w_temp', 
-    # 'sliding_window', 
-    # 'sliding_window_w_temp', 
-    # 'sliding_window_w_stride', 
+    'frames', 
+    'frames_w_temp', 
+    'sliding_window', 
+    'sliding_window_w_temp', 
+    'sliding_window_w_stride', 
     'fix_patched_512',
 ]
 OUTPUT_BASE = os.path.join('logs', 'train')
-PARALLEL = False
+PARALLEL = True
 model_config = yaml.safe_load(open("config/models.yml", "r"))
 dataset_config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
+
+logger = setup_logger(
+    'extract_features', 
+    os.path.join(OUTPUT_BASE, 'extract_features.log'), 
+    console=False, 
+    file=True
+)
 
 def get_wrap_cmd(model, classifier, pooling, dataset, sliding_style):
     return (
@@ -52,13 +60,14 @@ def main():
                         if not SLIDING_STYLE in model_config[MODEL]['sliding_styles']: continue
                         wrap_cmd = get_wrap_cmd(MODEL, CLASSIFIER, POOLING, DATASET, SLIDING_STYLE)
                         OUTPUT_DIR = os.path.join(OUTPUT_BASE, DATASET, SLIDING_STYLE, MODEL, CLASSIFIER)
+                        submission_name = f"{MODEL}_{CLASSIFIER}_{POOLING}_{DATASET}_{SLIDING_STYLE}"
                         command = get_slurm_submission_command(
-                            f"{MODEL}_{CLASSIFIER}_{POOLING}_{DATASET}_{SLIDING_STYLE}",
+                            submission_name,
                             OUTPUT_DIR,
                             wrap_cmd,
                             gpu=1
                         ) if PARALLEL else wrap_cmd
-                        print(f"Running command: {command}")
+                        logger.info(f"Running command for {submission_name} with command: {command}")
                         subprocess.run(command, shell=True, check=True)
         
 if __name__ == "__main__":

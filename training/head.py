@@ -104,7 +104,7 @@ if __name__ == '__main__':
         ).build()
         
         print("Data loaded.")
-        train_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=10000)
+        train_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=1000)
         
         train_dataloader = torch.utils.data.DataLoader(
             train_dataset, 
@@ -114,7 +114,7 @@ if __name__ == '__main__':
             shuffle=False
         )
 
-        val_balanced_batch_sampler = MultiLabelBalancedSampler(val_dataset, max_samples_per_class=10000)
+        val_balanced_batch_sampler = MultiLabelBalancedSampler(val_dataset, max_samples_per_class=1000)
         val_dataloader = torch.utils.data.DataLoader(
             val_dataset, 
             sampler=val_balanced_batch_sampler,
