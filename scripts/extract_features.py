@@ -17,7 +17,7 @@ TARGET_MODELS = [
     'dino_large'
 ]
 TARGET_DATASETS = [
-    "abby", 
+    # "abby", 
     "mike"
 ]
 SLIDING_STYLES = [
@@ -27,7 +27,7 @@ SLIDING_STYLES = [
     # "sliding_window_w_temp", 
     # "sliding_window_w_stride", 
     # "fix_patched_512", 
-    "test_frames", 
+    # "test_frames", 
     "test_sliding_window", 
     "test_fix_patched_512",
 ]

@@ -280,7 +280,7 @@ class BaseSlidingWindowDataset(IterableDataset):
     samples_per_window: int= 16, 
     step_size: int = 1, 
     categories: list = None, 
-    is_image_dataset: bool = False, 
+    data_ndim: int = None, 
     shuffle: bool = False,
     patch_type: str = 'relative', 
     patch_h: int = 1, 
@@ -293,7 +293,7 @@ class BaseSlidingWindowDataset(IterableDataset):
         assert self.temporal_sample_interval > 0, f"temporal_sample_interval {self.temporal_sample_interval} should be greater than 0"
         assert self.tolerance_region <= (self.window_size - 1)//2, f"tolerance_region {self.tolerance_region} should be less than or equal to window_size {self.window_size//2}"
         assert self.label_type == "onehot", 'currently only onehot is supported'
-        if self.is_image_dataset: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
+        if self.data_ndim == 3: assert self.samples_per_window ==1, "samples per window should be 1 for image datasets"
         self.image_window_queue = deque([], maxlen=self.window_size)
         self.labels_window_queue = deque([], maxlen=self.window_size)
         self.patcher = Patcher(self.patch_type, self.patch_h, self.patch_w)
@@ -408,7 +408,7 @@ class BaseSlidingWindowDataset(IterableDataset):
             if self.input_transform:
                 tensor_clip = self.input_transform(tensor_clip)
 
-        if self.is_image_dataset: tensor_clip = tensor_clip.squeeze()
+        if self.data_ndim == 3: tensor_clip = tensor_clip.squeeze() # image dataset remove additional dimension
         return tensor_clip
 
     def scan(self, annotated_video_frames: Iterator):
@@ -692,10 +692,10 @@ class PrecomputedDatasetV2(Dataset):
             file_paths = get_files_of_type(self.path, ".npy", min_ctime=min_ctime)
             INPUT_TYPE = "inputs" if feature_model is None else f"{feature_model}_features"
             self.input_paths = [p for p in file_paths if INPUT_TYPE in p]
-            print(len(self.input_paths))
+            print(f"found {len(self.input_paths)} input files")
         with step_timer("loading label file paths", verbose=PROFILE):
             self.label_paths = get_files_of_type(self.path, ".tsv", min_ctime=min_ctime)
-            print(len(self.label_paths))
+            print(f"found {len(self.label_paths)} label files")
         with step_timer("creating dictionaries", verbose=PROFILE):
             self.label_dict = {os.path.basename(p).split('.')[0]: np.loadtxt(p, delimiter='\t') for p in self.label_paths}
             self.input_dict = {os.path.basename(p).split('.')[0]: p for p in self.input_paths}
@@ -745,7 +745,7 @@ class SlidingWindowConfig(BaseModel):
     tolerance_region: int 
     samples_per_window: int
     step_size: int
-    is_image_dataset: bool  
+    data_ndim: int  
     shuffle:  bool
     patch_type: str
     patch_h: int

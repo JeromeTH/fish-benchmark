@@ -12,12 +12,12 @@ from abc import ABC, abstractmethod
 
 
 class HasInputNDims(ABC):
-    def get_input_ndims(self):
-        assert hasattr(self, 'input_ndims'), (
-            f"{self.__class__.__name__} must have an 'input_ndims' attribute"
+    def get_input_ndim(self):
+        assert hasattr(self, 'input_ndim'), (
+            f"{self.__class__.__name__} must have an 'input_ndim' attribute"
         )
         """Return the number of expected input dimensions."""
-        return self.input_ndims
+        return self.input_ndim
 
 '''
 Pooling classes
@@ -28,10 +28,10 @@ class BasePooler(HasInputNDims):
     '''
     def __init__(self):
         super().__init__()
-        self.input_ndims = 2
+        self.input_ndim = 2
 
-    def get_input_ndims(self):
-            return self.input_ndims
+    def get_input_ndim(self):
+            return self.input_ndim
     
     @abstractmethod
     def forward(self, x):
@@ -79,7 +79,7 @@ Classifier classes
 class BaseClassifier(HasInputNDims):
     def __init__(self):
         super().__init__()
-        self.input_ndims = 1
+        self.input_ndim = 1
 
     @abstractmethod
     def forward(self, x):
@@ -129,7 +129,7 @@ class BackBoneModel(nn.Module, HasInputNDims):
         self.model = self.get_pretrained_model(model_name)
         self.config = self.model.config
         self.ioconfig = yaml.safe_load(open("config/models.yml", "r"))[model_name]
-        self.input_ndims = self.ioconfig['input_ndims']
+        self.input_ndim = self.ioconfig['input_ndim']
     
     def get_pretrained_model(self, model_name):
         if model_name == 'clip':
@@ -191,16 +191,16 @@ class BroadcastableModule(nn.Module):
     def __init__(self, model: nn.Module):
         super().__init__()
         self.model = model
-        assert hasattr(model, 'input_ndims'), (
-            f"{model.__class__.__name__} must have an 'input_ndims' attribute"
+        assert hasattr(model, 'input_ndim'), (
+            f"{model.__class__.__name__} must have an 'input_ndim' attribute"
         )
-        self.input_ndims = self.model.input_ndims
+        self.input_ndim = self.model.input_ndim
         self.chunk_size = 128
 
     def forward(self, x):
-        assert x.ndim >= self.input_ndims + 1, f"Input tensor must have at least {self.input_ndims + 1} dimensions, got {x.ndim}"
-        batch_shape = x.shape[: x.ndim - self.input_ndims]
-        input_shape = x.shape[-self.input_ndims:]
+        assert x.ndim >= self.input_ndim + 1, f"Input tensor must have at least {self.input_ndim + 1} dimensions, got {x.ndim}"
+        batch_shape = x.shape[: x.ndim - self.input_ndim]
+        input_shape = x.shape[-self.input_ndim:]
 
         flat_x = x.view(-1, *input_shape)
         # Unflatten batch dimensions
@@ -280,6 +280,10 @@ class ModelBuilder():
         self.pooling = pooling
         return self
     
+    def set_aggregator(self, aggregator):
+        self.aggregator = aggregator
+        return self
+    
     def set_classifier(self, classifier, input_dim, output_dim):
         self.classifier = classifier
         self.classifier_input_dim = input_dim
@@ -292,4 +296,10 @@ class ModelBuilder():
         MODEL = BroadcastableModule(BackBoneModel(self.model)) if self.model else nn.Identity()
         POOLING = BroadcastableModule(PoolerFactory(self.pooling, dim=1, hidden_size=self.hidden_size).build()) if self.pooling else nn.Identity()
         CLASSIFIER = BroadcastableModule(ClassifierFactory(self.classifier, self.classifier_input_dim, self.classifier_output_dim).build()) if self.classifier else nn.Identity()
-        return ComposedModel(MODEL, POOLING, CLASSIFIER)
+        AGGREGATOR = BroadcastableModule(PoolerFactory(self.aggregator, dim=1).build()) if self.aggregator else nn.Identity()
+        return nn.Sequential(
+            MODEL,
+            POOLING,
+            CLASSIFIER,
+            AGGREGATOR
+        )

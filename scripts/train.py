@@ -8,26 +8,27 @@ from submission import get_slurm_submission_command
 
 MODELS = [
     'dino', 
-    'dino_large',
-    'videomae'
+    # 'dino_large',
+    # 'videomae'
 ]
 CLASSIFIERS = [
     'mlp'
 ]
 POOLINGS = [
     'mean', 
-    'attention'
+    # 'attention'
 ]
 DATASETS = [
-    'abby', 
+    # 'abby', 
     'mike'
 ]
 SLIDING_STYLES = [
-    'frames', 
-    'frames_w_temp', 
-    'sliding_window', 
-    'sliding_window_w_temp', 
-    'sliding_window_w_stride'
+    # 'frames', 
+    # 'frames_w_temp', 
+    # 'sliding_window', 
+    # 'sliding_window_w_temp', 
+    # 'sliding_window_w_stride', 
+    'fix_patched_512',
 ]
 OUTPUT_BASE = os.path.join('logs', 'train')
 PARALLEL = False

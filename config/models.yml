@@ -1,6 +1,6 @@
 videomae: 
-  input_ndims: 4 #time, channel, height, width
-  output_ndims: 2 #ntoken, embed_dim
+  input_ndim: 4 #time, channel, height, width
+  output_ndim: 2 #ntoken, embed_dim
   sliding_styles: [
     'sliding_window', 
     'sliding_window_w_temp',
@@ -9,16 +9,16 @@ videomae:
   ]
   
 clip: 
-  input_ndims: 3 #channel, height, width
-  output_ndims: 2 #ntoken, embed_dim
+  input_ndim: 3 #channel, height, width
+  output_ndim: 2 #ntoken, embed_dim
   sliding_styles: [
     'frames', 
     'frames_w_temp',
   ]
 
 dino: 
-  input_ndims: 3 #channel, height, width
-  output_ndims: 2 #ntoken, embed_dim
+  input_ndim: 3 #channel, height, width
+  output_ndim: 2 #ntoken, embed_dim
   sliding_styles: [
     'frames', 
     'frames_w_temp',
@@ -29,8 +29,8 @@ dino:
   ]
 
 dino_large: 
-  input_ndims: 3 #channel, height, width
-  output_ndims: 2 #ntoken, embed_dim
+  input_ndim: 3 #channel, height, width
+  output_ndim: 2 #ntoken, embed_dim
   sliding_styles: [
     'frames', 
     'frames_w_temp',
@@ -41,16 +41,16 @@ dino_large:
   ]
 
 swinv2: 
-  input_ndims: 3 #channel, height, width
-  output_ndims: 2 #ntoken, embed_dim
+  input_ndim: 3 #channel, height, width
+  output_ndim: 2 #ntoken, embed_dim
   sliding_styles: [
     'frames', 
     'frames_w_temp',
   ]
   
 timesformer: 
-  input_ndims: 4 #time, channel, height, width
-  output_ndims: 2 #ntoken, embed_dim
+  input_ndim: 4 #time, channel, height, width
+  output_ndim: 2 #ntoken, embed_dim
   sliding_styles: [
     'sliding_window', 
     'sliding_window_w_temp',

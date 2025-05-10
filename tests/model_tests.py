@@ -52,7 +52,7 @@ class TestModelComponents(unittest.TestCase):
 
     def test_broadcastable_module(self):
         base = Linear(384, 10)
-        base.input_ndims = 2  # simulate interface
+        base.input_ndim = 2  # simulate interface
         wrapped = BroadcastableModule(base)
         x = torch.randn(2, 3, 384)
         out = wrapped(x)

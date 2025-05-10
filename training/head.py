@@ -23,16 +23,22 @@ def get_args():
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--sliding_style", required=True)
     parser.add_argument("--model", required=True)
-    parser.add_argument("--epochs", default=50)
+    parser.add_argument("--epochs", default=10)
     parser.add_argument("--lr", default=.00005)
     parser.add_argument("--batch_size", default=32)
     parser.add_argument("--shuffle", default=False)
+    parser.add_argument("--train_subset", default="")
+    parser.add_argument("--val_subset", default="")
     parser.add_argument("--label_type", default='onehot')
     parser.add_argument("--min_ctime", default = '1746331200.0')
 
     return parser.parse_args()
 
 if __name__ == '__main__':
+    dataset_config = yaml.safe_load(open('config/datasetsv2.yml', 'r'))
+    sliding_style_config = yaml.safe_load(open('config/sliding_style.yml', 'r'))
+    model_config = yaml.safe_load(open('config/models.yml', 'r'))
+
     args = get_args()
     CLASSIFIER = args.classifier
     POOLING = args.pooling
@@ -44,9 +50,14 @@ if __name__ == '__main__':
     SHUFFLE = args.shuffle
     MODEL = args.model
     LABEL_TYPE = args.label_type
+    TR_SUBSET = args.train_subset   
+    VAL_SUBSET = args.val_subset 
     MIN_CTIME = float(args.min_ctime)
-
-    dataset_config = yaml.safe_load(open('config/datasetsv2.yml', 'r'))
+    consumed_ndim = model_config[MODEL]['input_ndim'] - model_config[MODEL]['output_ndim']
+    AGGREGATOR = ('max' if sliding_style_config[SLIDING_STYLE]['data_ndim'] - consumed_ndim - 1 > 1 
+                  else None)  # -1 because pooling consumes one dimension. If there are dimensions left, we need to aggregate them 
+                            # In the end, we want it to have one dimension which is the number of classes
+    
     available_gpus = torch.cuda.device_count()
     print(f"Available GPUs: {available_gpus}")
     with wandb.init(
@@ -64,7 +75,7 @@ if __name__ == '__main__':
                 "dataset": DATASET, 
                 "sliding_style": SLIDING_STYLE, 
                 "shuffle": SHUFFLE, 
-                "sampler": "balanced",},
+                "sampler": "balanced"},
         dir="./logs"
     ) as run:
         wandb_logger = WandbLogger(
@@ -74,7 +85,7 @@ if __name__ == '__main__':
         )
         print("Loading train data...")
         train_dataset = DatasetBuilder(
-            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'train'), 
+            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'train', TR_SUBSET), 
             dataset_name = DATASET,
             style=SLIDING_STYLE,
             transform=None, 
@@ -84,7 +95,7 @@ if __name__ == '__main__':
         ).build()
         print("Loading val data...")
         val_dataset = DatasetBuilder(
-            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'val'), 
+            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'val', VAL_SUBSET), 
             dataset_name = DATASET,
             style=SLIDING_STYLE,
             transform=None, 
@@ -118,6 +129,7 @@ if __name__ == '__main__':
                       .set_hidden_size(hidden_size)
                       .set_pooling(POOLING)
                       .set_classifier(CLASSIFIER, input_dim=hidden_size, output_dim=len(train_dataset.categories))
+                      .set_aggregator(AGGREGATOR)
                       .build())
         
         checkpoint_callback = ModelCheckpoint(
@@ -139,4 +151,4 @@ if __name__ == '__main__':
         
         trainer.fit(lit_module, train_dataloader, val_dataloader)
         log_best_model(checkpoint_callback, run)
-        log_dataset_summary(train_dataset, run)
+        # log_dataset_summary(train_dataset, run)

@@ -3,7 +3,7 @@ frames:
   tolerance_region: 0 
   samples_per_window: 1 
   step_size: 1
-  is_image_dataset: True 
+  data_ndim: 3 
   shuffle:  False
   patch_type: "relative"
   patch_h: 1
@@ -16,7 +16,7 @@ frames_w_temp:
   tolerance_region: 0
   samples_per_window: 1 
   step_size: 1
-  is_image_dataset: True 
+  data_ndim: 3 
   shuffle:  False
   patch_type: "relative"
   patch_h: 1
@@ -29,7 +29,7 @@ sliding_window:
   tolerance_region: 7
   samples_per_window: 16 
   step_size: 8
-  is_image_dataset: False 
+  data_ndim: 4 
   shuffle: False
   patch_type: "relative"
   patch_h: 1
@@ -43,7 +43,7 @@ sliding_window_w_temp:
   tolerance_region: 7
   samples_per_window: 16 
   step_size: 8
-  is_image_dataset: False 
+  data_ndim: 4 
   shuffle: False
   patch_type: "relative"
   patch_h: 1
@@ -56,7 +56,7 @@ sliding_window_w_stride:
   tolerance_region: 7
   samples_per_window: 16 
   step_size: 16
-  is_image_dataset: False 
+  data_ndim: 4 
   shuffle: False
   patch_type: "relative"
   patch_h: 1
@@ -69,7 +69,7 @@ fix_patched_224:
   tolerance_region: 0
   samples_per_window: 1 
   step_size: 1
-  is_image_dataset: False 
+  data_ndim: 4 
   shuffle:  False
   patch_type: "absolute"
   patch_h: 224
@@ -82,7 +82,7 @@ fix_patched_512:
   tolerance_region: 0
   samples_per_window: 1 
   step_size: 1
-  is_image_dataset: False 
+  data_ndim: 4 
   shuffle:  False
   patch_type: "absolute"
   patch_h: 512
@@ -98,7 +98,7 @@ test_frames:
   tolerance_region: 0 
   samples_per_window: 1 
   step_size: 1
-  is_image_dataset: True 
+  data_ndim: 3 
   shuffle:  False
   patch_type: "relative"
   patch_h: 1
@@ -111,7 +111,7 @@ test_sliding_window:
   tolerance_region: 0
   samples_per_window: 16 
   step_size: 1
-  is_image_dataset: False 
+  data_ndim: 4 
   shuffle: False
   patch_type: "relative"
   patch_h: 1
@@ -124,7 +124,7 @@ test_fix_patched_512:
   tolerance_region: 0
   samples_per_window: 1 
   step_size: 1
-  is_image_dataset: False 
+  data_ndim: 4 
   shuffle:  False
   patch_type: "absolute"
   patch_h: 512
