@@ -60,95 +60,96 @@ if __name__ == '__main__':
     
     available_gpus = torch.cuda.device_count()
     print(f"Available GPUs: {available_gpus}")
-    with wandb.init(
-        project=DATASET,
-        entity = "fish-benchmark",
-        notes="Using precomputed embeddings",
+    config_dict = {
+        "epochs": EPOCHS,
+        "learning_rate": LEARNING_RATE,
+        "batch_size": BATCH_SIZE,
+        "optimizer": "adam",
+        "classifier": CLASSIFIER,
+        "pooling": POOLING,
+        "backbone": MODEL,
+        "dataset": DATASET,
+        "sliding_style": SLIDING_STYLE,
+        "shuffle": SHUFFLE,
+        "sampler": "balanced",
+        "max_samples_per_class": 1000,
+    }
+    wandb_logger = WandbLogger(
+        project=DATASET,    
+        entity="fish-benchmark",
+        save_dir="./logs",
+        log_model="best", 
         tags=[CLASSIFIER, POOLING, DATASET, SLIDING_STYLE, MODEL],
-        config={"epochs": EPOCHS, 
-                "learning_rate": LEARNING_RATE, 
-                "batch_size": BATCH_SIZE, 
-                "optimizer": "adam", 
-                "classifier": CLASSIFIER, 
-                "pooling": POOLING,
-                "model": MODEL, 
-                "dataset": DATASET, 
-                "sliding_style": SLIDING_STYLE, 
-                "shuffle": SHUFFLE, 
-                "sampler": "balanced"},
-        dir="./logs"
-    ) as run:
-        wandb_logger = WandbLogger(
-            project=run.project,    
-            save_dir="./logs",
-            log_model="best"
-        )
-        print("Loading train data...")
-        train_dataset = DatasetBuilder(
-            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'train', TR_SUBSET), 
-            dataset_name = DATASET,
-            style=SLIDING_STYLE,
-            transform=None, 
-            precomputed=True, 
-            feature_model=MODEL,
-            min_ctime=MIN_CTIME,
-        ).build()
-        print("Loading val data...")
-        val_dataset = DatasetBuilder(
-            path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'val', VAL_SUBSET), 
-            dataset_name = DATASET,
-            style=SLIDING_STYLE,
-            transform=None, 
-            precomputed=True, 
-            feature_model=MODEL,
-        ).build()
-        
-        print("Data loaded.")
-        train_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=1000)
-        
-        train_dataloader = torch.utils.data.DataLoader(
-            train_dataset, 
-            sampler=train_balanced_batch_sampler,
-            batch_size=run.config['batch_size'], 
-            num_workers=7, 
-            shuffle=False
-        )
+        config=config_dict,
+    )
+    print("Loading train data...")
+    train_dataset = DatasetBuilder(
+        path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'train', TR_SUBSET), 
+        dataset_name = DATASET,
+        style=SLIDING_STYLE,
+        transform=None, 
+        precomputed=True, 
+        feature_model=MODEL,
+        min_ctime=MIN_CTIME,
+    ).build()
+    print("Loading val data...")
+    val_dataset = DatasetBuilder(
+        path = os.path.join(dataset_config[DATASET]['precomputed_path'], SLIDING_STYLE, 'val', VAL_SUBSET), 
+        dataset_name = DATASET,
+        style=SLIDING_STYLE,
+        transform=None, 
+        precomputed=True, 
+        feature_model=MODEL,
+    ).build()
+    
+    print("Data loaded.")
+    train_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=wandb_logger.experiment.config["max_samples_per_class"])
+    
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset, 
+        sampler=train_balanced_batch_sampler,
+        batch_size=wandb_logger.experiment.config["batch_size"], 
+        num_workers=7, 
+        shuffle=False
+    )
 
-        val_balanced_batch_sampler = MultiLabelBalancedSampler(val_dataset, max_samples_per_class=1000)
-        val_dataloader = torch.utils.data.DataLoader(
-            val_dataset, 
-            sampler=val_balanced_batch_sampler,
-            batch_size=run.config['batch_size'], 
-            num_workers=7, 
-            shuffle=False
-        )
-        
-        # to get hidden size
-        hidden_size = ModelBuilder().set_model(MODEL).get_hidden_size()
-        classifier = (ModelBuilder()
-                      .set_hidden_size(hidden_size)
-                      .set_pooling(POOLING)
-                      .set_classifier(CLASSIFIER, input_dim=hidden_size, output_dim=len(train_dataset.categories))
-                      .set_aggregator(AGGREGATOR)
-                      .build())
-        
-        checkpoint_callback = ModelCheckpoint(
-            monitor="val_loss",
-            save_top_k=1,
-            mode="min",
-            dirpath=f"./checkpoints/{run.id}",
-            filename="best-{epoch:02d}-{val_loss:.2f}",
-        )
+    val_balanced_batch_sampler = MultiLabelBalancedSampler(val_dataset, max_samples_per_class=wandb_logger.experiment.config["max_samples_per_class"])
+    val_dataloader = torch.utils.data.DataLoader(
+        val_dataset, 
+        sampler=val_balanced_batch_sampler,
+        batch_size=wandb_logger.experiment.config["batch_size"], 
+        num_workers=7, 
+        shuffle=False
+    )
+    
+    # to get hidden size
+    hidden_size = ModelBuilder().set_model(MODEL).get_hidden_size()
+    classifier = (ModelBuilder()
+                .set_hidden_size(hidden_size)
+                .set_pooling(POOLING)
+                .set_classifier(CLASSIFIER, input_dim=hidden_size, output_dim=len(train_dataset.categories))
+                .set_aggregator(AGGREGATOR)
+                .build())
+    
+    checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss",
+        save_top_k=1,
+        mode="min",
+        dirpath=f"./checkpoints/{wandb_logger.experiment.id}",
+        filename="best-{epoch:02d}-{val_loss:.2f}",
+    )
 
-        lit_module = LitBinaryClassifierModule(classifier, learning_rate = run.config['learning_rate'], optimizer = run.config['optimizer'])
-        tqdm_disable = not sys.stdout.isatty()
-        print(f"Are we in an interactive terminal? {not tqdm_disable}")
-        trainer = L.Trainer(max_epochs=run.config['epochs'], 
-                            logger=wandb_logger, 
-                            log_every_n_steps= 50, 
-                            callbacks=[checkpoint_callback], 
-                            check_val_every_n_epoch = 1)
-        
-        trainer.fit(lit_module, train_dataloader, val_dataloader)
-        log_best_model(checkpoint_callback, run)
-        # log_dataset_summary(train_dataset, run)
+    lit_module = LitBinaryClassifierModule(classifier, 
+                                           learning_rate = wandb_logger.experiment.config['learning_rate'], 
+                                           optimizer = wandb_logger.experiment.config['optimizer'])
+    tqdm_disable = not sys.stdout.isatty()
+    print(f"Are we in an interactive terminal? {not tqdm_disable}")
+    trainer = L.Trainer(max_epochs=wandb_logger.experiment.config['epochs'], 
+                        logger=wandb_logger, 
+                        log_every_n_steps= 50, 
+                        callbacks=[checkpoint_callback], 
+                        check_val_every_n_epoch = 1)
+    
+    trainer.fit(lit_module, train_dataloader, val_dataloader)
+    log_best_model(checkpoint_callback, wandb_logger.experiment)
+    # log_dataset_summary(train_dataset, run)
