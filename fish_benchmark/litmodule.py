@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 import lightning as L
+import json
+import wandb
 from torchmetrics.functional.classification import (
     multilabel_precision,
     multilabel_recall,
@@ -69,7 +71,11 @@ class LitBinaryClassifierModule(L.LightningModule):
         self.log(f'{prefix}_loss', loss)
         preds = (probs > 0.5).float()
         self.log_additional_metrics(prefix, preds, y)
-        return loss
+        return {
+            "loss": loss,
+            "preds": preds,
+            "targets": y
+        }
 
 
     def training_step(self, batch, batch_idx):
@@ -80,7 +86,30 @@ class LitBinaryClassifierModule(L.LightningModule):
     
     def test_step(self, batch, batch_idx):
         return self.shared_step(batch, 'test')
+    
+    def on_test_epoch_end(self, outputs):
+        preds = torch.cat([x["preds"] for x in outputs], dim=0)
+        targets = torch.cat([x["targets"] for x in outputs], dim=0)
 
+        num_classes = preds.shape[1]
+
+        metrics = {
+            "f1_micro": multilabel_f1_score(preds, targets, num_labels=num_classes, average="micro").item(),
+            "f1_macro": multilabel_f1_score(preds, targets, num_labels=num_classes, average="macro").item(),
+            "mAP": multilabel_average_precision(preds, targets, num_labels=num_classes, average="macro").item(),
+            "acc": (preds == targets).float().mean().item(),
+        }
+
+        f1_per_class = multilabel_f1_score(preds, targets, num_labels=num_classes, average=None)
+        for i, f1 in enumerate(f1_per_class):
+            metrics[f"f1_class_{i}"] = f1.item()
+
+        num_positives = targets.float().sum(dim=0)
+        for i, count in enumerate(num_positives):
+            metrics[f"num_positive_class_{i}"] = count.item()
+
+        return metrics
+    
     def configure_optimizers(self):
         learning_rate = self.hparams.learning_rate
         weight_decay = self.hparams.weight_decay

@@ -68,6 +68,7 @@ if __name__ == '__main__':
         "classifier": CLASSIFIER,
         "pooling": POOLING,
         "backbone": MODEL,
+        "aggregator": AGGREGATOR,
         "dataset": DATASET,
         "sliding_style": SLIDING_STYLE,
         "shuffle": SHUFFLE,
@@ -123,7 +124,7 @@ if __name__ == '__main__':
     )
     
     # to get hidden size
-    hidden_size = ModelBuilder().set_model(MODEL).get_hidden_size()
+    hidden_size = ModelBuilder().set_backbone(MODEL).get_hidden_size()
     classifier = (ModelBuilder()
                 .set_hidden_size(hidden_size)
                 .set_pooling(POOLING)

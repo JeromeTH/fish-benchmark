@@ -258,12 +258,14 @@ class ComposedModel(nn.Module):
 
 
 class ModelBuilder():
-    def __init__(self):
-        self.model = None
-        self.pooling = None
-        self.classifier = None
-        self.hidden_size = None
-        self.aggregator = None
+    def __init__(self, backbone: str, pooling: str, classifier: str, hidden_size: int, aggregator: str):
+        self.backbone = backbone
+        self.pooling = pooling
+        self.classifier = classifier
+        self.hidden_size = hidden_size
+        self.aggregator = aggregator
+        self.classifier_input_dim = None
+        self.classifier_output_dim = None
 
     def set_hidden_size(self, hidden_size):
         self.hidden_size = hidden_size
@@ -272,9 +274,9 @@ class ModelBuilder():
     def get_hidden_size(self):
         return self.hidden_size
     
-    def set_model(self, model):
-        self.model = model
-        self.hidden_size = BackBoneModel(model).config.hidden_size
+    def set_backbone(self, backbone):
+        self.backbone = backbone
+        self.hidden_size = BackBoneModel(backbone).config.hidden_size
         return self
     
     def set_pooling(self, pooling):
@@ -291,15 +293,25 @@ class ModelBuilder():
         self.classifier_output_dim = output_dim
         return self
 
+    @classmethod
+    def from_config(cls, config):
+        # Extract the model parameters from the config
+        backbone = config.get("backbone", None)
+        pooling = config.get("pooling", None)
+        classifier = config.get("classifier", None)
+        hidden_size = config.get("hidden_size", None)
+        aggregator = config.get("aggregator", None)
+        return cls(backbone, pooling, classifier, hidden_size, aggregator)
+
     def build(self):
         #dimension check
-        if self.classifier and self.model: assert self.classifier_input_dim == self.hidden_size, f"Classifier input dimension {self.classifier_input_dim} does not match model hidden size {self.hidden_size}"
-        MODEL = BroadcastableModule(BackBoneModel(self.model)) if self.model else nn.Identity()
+        if self.classifier and self.backbone: assert self.classifier_input_dim == self.hidden_size, f"Classifier input dimension {self.classifier_input_dim} does not match backbone hidden size {self.hidden_size}"
+        BACKBONE = BroadcastableModule(BackBoneModel(self.backbone)) if self.backbone else nn.Identity()
         POOLING = BroadcastableModule(PoolerFactory(self.pooling, dim=1, hidden_size=self.hidden_size).build()) if self.pooling else nn.Identity()
         CLASSIFIER = BroadcastableModule(ClassifierFactory(self.classifier, self.classifier_input_dim, self.classifier_output_dim).build()) if self.classifier else nn.Identity()
         AGGREGATOR = BroadcastableModule(PoolerFactory(self.aggregator, dim=1).build()) if self.aggregator else nn.Identity()
         return nn.Sequential(
-            MODEL,
+            BACKBONE,
             POOLING,
             CLASSIFIER,
             AGGREGATOR
