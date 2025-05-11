@@ -263,6 +263,7 @@ class ModelBuilder():
         self.pooling = None
         self.classifier = None
         self.hidden_size = None
+        self.aggregator = None
 
     def set_hidden_size(self, hidden_size):
         self.hidden_size = hidden_size
