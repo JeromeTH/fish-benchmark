@@ -16,6 +16,7 @@ eval_config = yaml.safe_load(open('config/eval.yml', 'r'))
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 TEST_METRIC_DIR = os.path.join('logs', 'test_metrics')
+os.makedirs(TEST_METRIC_DIR, exist_ok=True)
 
 
 def get_args():
@@ -35,46 +36,35 @@ if __name__ == "__main__":
     ckpt_file = glob.glob(os.path.join(artifact_dir, "*.ckpt"))
     assert len(ckpt_file) == 1, f"Expected exactly one .ckpt file in {artifact_dir}"
     print(f"Artifact downloaded to {artifact_dir}")
-    train_config = artifact.logged_by().config
-
+    config = artifact.logged_by().config
+    config['test_sliding_style'] = eval_config[config['sliding_style']]
     #define testing config
-    DATASET = train_config.get("dataset", None)
-    SLIDING_STYLE = train_config.get("sliding_style", None)
-    BACKBONE = train_config.get("backbone", None)
-    POOLING = train_config.get("pooling", None)
-    CLASSIFIER = train_config.get("classifier", None)
-    AGGREGATOR = train_config.get("aggregator", None)
-    TEST_SLIDING_STYLE = eval_config[SLIDING_STYLE]
-
-    #setup wandb logger for testing run
-    config_dict = {
-        "batch_size": 32,
-        "dataset": DATASET,
-        "backbone": BACKBONE,
-        "pooling": POOLING,
-        "classifier": CLASSIFIER,
-        "aggregator": AGGREGATOR,
-        "train_sliding_style": SLIDING_STYLE,
-        "test_sliding_style": TEST_SLIDING_STYLE,
-        "shuffle": False,
-    }
+    tags_keys = [
+        'dataset', 
+        'sliding_style',
+        'backbone',
+        'pooling',
+        'classifier',
+        'sampler',
+        'test_sliding_style',
+    ]
 
     wandb_logger = WandbLogger(
-        project=f'{DATASET}_eval',    
+        project=f'{config['dataset']}_eval',    
         entity="fish-benchmark",
         save_dir="./logs",
-        tags=[DATASET, SLIDING_STYLE, TEST_SLIDING_STYLE, BACKBONE, POOLING, CLASSIFIER],
-        config=config_dict,
+        tags=[v for k, v in config.items() if k in tags_keys],
+        config=config,
     )
 
-    test_data_dir = os.path.join(dataset_config[DATASET]['precomputed_path'], TEST_SLIDING_STYLE, 'test')
+    test_data_dir = os.path.join(dataset_config[config['dataset']]['precomputed_path'], config['test_sliding_style'], 'test')
     test_dataset = DatasetBuilder(
         path=test_data_dir, 
-        dataset_name=DATASET,
-        style=TEST_SLIDING_STYLE,
+        dataset_name=config['dataset'],
+        style=config['test_sliding_style'],
         transform=None,
         precomputed=True,
-        feature_model=train_config['backbone']
+        feature_model=config['backbone']
     ).build()
     test_dataloader = DataLoader(
         test_dataset, 

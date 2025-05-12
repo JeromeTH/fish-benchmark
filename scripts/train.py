@@ -31,6 +31,10 @@ SLIDING_STYLES = [
     'sliding_window_w_stride', 
     'fix_patched_512',
 ]
+SAMPLERS = [
+    'balanced',
+    'random'
+]
 OUTPUT_BASE = os.path.join('logs', 'train')
 PARALLEL = True
 model_config = yaml.safe_load(open("config/models.yml", "r"))
@@ -43,32 +47,33 @@ logger = setup_logger(
     file=True
 )
 
-def get_wrap_cmd(model, classifier, pooling, dataset, sliding_style):
+def get_wrap_cmd(model, classifier, pooling, dataset, sliding_style, sampler):
     return (
         f'python training/head.py '
         f'--classifier {classifier} --pooling {pooling} --dataset {dataset} --sliding_style {sliding_style} '
-        f'--model {model}' 
+        f'--model {model} --sampler {sampler} ' 
     )
 
 def main():
-    for MODEL in MODELS:
-        for CLASSIFIER in CLASSIFIERS:
-            for POOLING in POOLINGS: 
-                for DATASET in DATASETS:
-                    for SLIDING_STYLE in SLIDING_STYLES:
-                        if not SLIDING_STYLE in dataset_config[DATASET]['splits']['train']['sliding_styles']: continue
-                        if not SLIDING_STYLE in model_config[MODEL]['sliding_styles']: continue
-                        wrap_cmd = get_wrap_cmd(MODEL, CLASSIFIER, POOLING, DATASET, SLIDING_STYLE)
-                        OUTPUT_DIR = os.path.join(OUTPUT_BASE, DATASET, SLIDING_STYLE, MODEL, CLASSIFIER)
-                        submission_name = f"{MODEL}_{CLASSIFIER}_{POOLING}_{DATASET}_{SLIDING_STYLE}"
-                        command = get_slurm_submission_command(
-                            submission_name,
-                            OUTPUT_DIR,
-                            wrap_cmd,
-                            gpu=1
-                        ) if PARALLEL else wrap_cmd
-                        logger.info(f"Running command for {submission_name} with command: {command}")
-                        subprocess.run(command, shell=True, check=True)
+    for DATASET in DATASETS:
+        for SLIDING_STYLE in SLIDING_STYLES:
+            for MODEL in MODELS:
+                for POOLING in POOLINGS: 
+                    for CLASSIFIER in CLASSIFIERS:
+                        for SAMPLER in SAMPLERS: 
+                            if not SLIDING_STYLE in dataset_config[DATASET]['splits']['train']['sliding_styles']: continue
+                            if not SLIDING_STYLE in model_config[MODEL]['sliding_styles']: continue
+                            wrap_cmd = get_wrap_cmd(MODEL, CLASSIFIER, POOLING, DATASET, SLIDING_STYLE, SAMPLER)
+                            OUTPUT_DIR = os.path.join(OUTPUT_BASE, DATASET, SLIDING_STYLE, MODEL, POOLING, CLASSIFIER, SAMPLER)
+                            submission_name = f"{MODEL}_{CLASSIFIER}_{POOLING}_{DATASET}_{SLIDING_STYLE}"
+                            command = get_slurm_submission_command(
+                                submission_name,
+                                OUTPUT_DIR,
+                                wrap_cmd,
+                                gpu=1
+                            ) if PARALLEL else wrap_cmd
+                            logger.info(f"Running command for {submission_name} with command: {command}")
+                            subprocess.run(command, shell=True, check=True)
         
 if __name__ == "__main__":
     main()

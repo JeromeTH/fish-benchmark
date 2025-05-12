@@ -23,7 +23,8 @@ def get_args():
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--sliding_style", required=True)
     parser.add_argument("--model", required=True)
-    parser.add_argument("--epochs", default=10)
+    parser.add_argument("--sampler", required=True)
+    parser.add_argument("--epochs", default=20)
     parser.add_argument("--lr", default=.00005)
     parser.add_argument("--batch_size", default=32)
     parser.add_argument("--shuffle", default=False)
@@ -53,6 +54,9 @@ if __name__ == '__main__':
     TR_SUBSET = args.train_subset   
     VAL_SUBSET = args.val_subset 
     MIN_CTIME = float(args.min_ctime)
+    SAMPLER = args.sampler # 'balanced' or 'random'
+    MAX_SAMPLES_PER_CLASS = 1000
+    MONITOR = 'val_mAP' # 'val_mAP' or 'val_loss'
     consumed_ndim = model_config[MODEL]['input_ndim'] - model_config[MODEL]['output_ndim']
     AGGREGATOR = ('max' if sliding_style_config[SLIDING_STYLE]['data_ndim'] - consumed_ndim - 1 > 1 
                   else None)  # -1 because pooling consumes one dimension. If there are dimensions left, we need to aggregate them 
@@ -61,26 +65,30 @@ if __name__ == '__main__':
     available_gpus = torch.cuda.device_count()
     print(f"Available GPUs: {available_gpus}")
     config_dict = {
+        #dataset config
+        "dataset": DATASET,
+        "sliding_style": SLIDING_STYLE,
+        #model config
+        "backbone": MODEL,
+        "pooling": POOLING,
+        "classifier": CLASSIFIER,
+        "aggregator": AGGREGATOR,
+        #training config
         "epochs": EPOCHS,
         "learning_rate": LEARNING_RATE,
         "batch_size": BATCH_SIZE,
         "optimizer": "adam",
-        "classifier": CLASSIFIER,
-        "pooling": POOLING,
-        "backbone": MODEL,
-        "aggregator": AGGREGATOR,
-        "dataset": DATASET,
-        "sliding_style": SLIDING_STYLE,
         "shuffle": SHUFFLE,
-        "sampler": "balanced",
-        "max_samples_per_class": 1000,
+        "sampler": SAMPLER,
+        "monitor": MONITOR,
+        "max_samples_per_class": MAX_SAMPLES_PER_CLASS,
     }
     wandb_logger = WandbLogger(
         project=DATASET,    
         entity="fish-benchmark",
         save_dir="./logs",
         log_model="best", 
-        tags=[CLASSIFIER, POOLING, DATASET, SLIDING_STYLE, MODEL],
+        tags=[DATASET, SLIDING_STYLE, MODEL, POOLING,CLASSIFIER, SAMPLER],
         config=config_dict,
     )
     print("Loading train data...")
@@ -104,20 +112,24 @@ if __name__ == '__main__':
     ).build()
     
     print("Data loaded.")
-    train_balanced_batch_sampler = MultiLabelBalancedSampler(train_dataset, max_samples_per_class=wandb_logger.experiment.config["max_samples_per_class"])
+    train_sampler = (MultiLabelBalancedSampler(train_dataset, max_samples_per_class=wandb_logger.experiment.config["max_samples_per_class"])
+               if wandb_logger.experiment.config["sampler"] == 'balanced' else 
+               torch.utils.data.RandomSampler(train_dataset))
     
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, 
-        sampler=train_balanced_batch_sampler,
+        sampler=train_sampler,
         batch_size=wandb_logger.experiment.config["batch_size"], 
         num_workers=7, 
         shuffle=False
     )
 
-    val_balanced_batch_sampler = MultiLabelBalancedSampler(val_dataset, max_samples_per_class=wandb_logger.experiment.config["max_samples_per_class"])
+    val_sampler = (MultiLabelBalancedSampler(val_dataset, max_samples_per_class=wandb_logger.experiment.config["max_samples_per_class"])
+                   if wandb_logger.experiment.config["sampler"] == 'balanced' else
+                     torch.utils.data.RandomSampler(val_dataset))
     val_dataloader = torch.utils.data.DataLoader(
         val_dataset, 
-        sampler=val_balanced_batch_sampler,
+        sampler=val_sampler,
         batch_size=wandb_logger.experiment.config["batch_size"], 
         num_workers=7, 
         shuffle=False
@@ -133,11 +145,11 @@ if __name__ == '__main__':
                 .build())
     
     checkpoint_callback = ModelCheckpoint(
-        monitor="val_loss",
+        monitor=MONITOR,
         save_top_k=1,
-        mode="min",
+        mode="max",
         dirpath=f"./checkpoints/{wandb_logger.experiment.id}",
-        filename="best-{epoch:02d}-{val_loss:.2f}",
+        filename="best-{epoch:02d}-{val_mAP:.2f}",
     )
 
     lit_module = LitBinaryClassifierModule(classifier, 

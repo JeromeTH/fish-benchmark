@@ -834,6 +834,8 @@ class MultiLabelBalancedSampler(Sampler):
             raise ValueError("Dataset must have a `.label_tensor` attribute of shape [N, num_classes]")
         
         self.label_tensor = dataset.label_tensor
+        #augment the label tensor with a dummy class for the "no label" case
+        self.label_tensor = torch.cat([self.label_tensor, (self.label_tensor.sum(dim=1, keepdim=True) == 0).float()], dim=1)
         print(f"label_tensor shape: {self.label_tensor.shape}")
         self.num_classes = self.label_tensor.shape[1]
         print(f"self.num_classes: {self.num_classes}")

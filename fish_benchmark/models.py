@@ -258,7 +258,7 @@ class ComposedModel(nn.Module):
 
 
 class ModelBuilder():
-    def __init__(self, backbone: str, pooling: str, classifier: str, hidden_size: int, aggregator: str):
+    def __init__(self, backbone: str = None, pooling: str = None, classifier: str = None, hidden_size: int = None, aggregator: str = None):
         self.backbone = backbone
         self.pooling = pooling
         self.classifier = classifier
