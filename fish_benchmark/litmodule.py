@@ -3,6 +3,8 @@ import torch.nn.functional as F
 import lightning as L
 import json
 import wandb
+from torch.optim.lr_scheduler import LambdaLR
+
 from torchmetrics.functional.classification import (
     multilabel_precision,
     multilabel_recall,
@@ -117,7 +119,20 @@ class LitBinaryClassifierModule(L.LightningModule):
     def configure_optimizers(self):
         learning_rate = self.hparams.learning_rate
         weight_decay = self.hparams.weight_decay
-        return torch.optim.AdamW(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        # Linear decay from 1.0 to 0.0
+        num_training_steps = self.trainer.estimated_stepping_batches
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        lr_lambda = lambda current_step: 1.0 - float(current_step) / float(num_training_steps)
+        scheduler = LambdaLR(optimizer, lr_lambda)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",  # called every training step
+                "frequency": 1,
+                "name": "lr", 
+            }
+        }
 
 class LitCategoricalClassifierModule(L.LightningModule):
     '''

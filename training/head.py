@@ -24,7 +24,7 @@ def get_args():
     parser.add_argument("--sliding_style", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--sampler", required=True)
-    parser.add_argument("--epochs", default=20)
+    parser.add_argument("--epochs", default=40)
     parser.add_argument("--lr", default=.00005)
     parser.add_argument("--batch_size", default=32)
     parser.add_argument("--shuffle", default=False)
@@ -157,7 +157,7 @@ if __name__ == '__main__':
                         logger=wandb_logger, 
                         log_every_n_steps= 50, 
                         callbacks=[checkpoint_callback], 
-                        check_val_every_n_epoch = 1)
+                        check_val_every_n_epoch = 5)
     
     trainer.fit(lit_module, train_dataloader, val_dataloader)
     log_best_model(checkpoint_callback, wandb_logger.experiment)
