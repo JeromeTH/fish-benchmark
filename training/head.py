@@ -114,7 +114,7 @@ if __name__ == '__main__':
     print("Data loaded.")
     train_sampler = (MultiLabelBalancedSampler(train_dataset, max_samples_per_class=wandb_logger.experiment.config["max_samples_per_class"])
                if wandb_logger.experiment.config["sampler"] == 'balanced' else 
-               torch.utils.data.RandomSampler(train_dataset))
+               torch.utils.data.RandomSampler(train_dataset, num_samples=MAX_SAMPLES_PER_CLASS * (len(train_dataset.categories) + 1)))
     
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, 
@@ -124,12 +124,8 @@ if __name__ == '__main__':
         shuffle=False
     )
 
-    val_sampler = (MultiLabelBalancedSampler(val_dataset, max_samples_per_class=wandb_logger.experiment.config["max_samples_per_class"])
-                   if wandb_logger.experiment.config["sampler"] == 'balanced' else
-                     torch.utils.data.RandomSampler(val_dataset))
     val_dataloader = torch.utils.data.DataLoader(
         val_dataset, 
-        sampler=val_sampler,
         batch_size=wandb_logger.experiment.config["batch_size"], 
         num_workers=7, 
         shuffle=False
