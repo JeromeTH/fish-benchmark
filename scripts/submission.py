@@ -4,7 +4,7 @@ import shutil
 logger = logging.getLogger(__name__)  # This will inherit the global configuration
 
 
-def get_slurm_submission_command(name, output_dir, wrap_cmd, gpu_types = ":a6000,6000ada,H100,a100", gpu_count=0):
+def get_slurm_submission_command(name, output_dir, wrap_cmd, gpu_types = "", gpu_count=0):
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)

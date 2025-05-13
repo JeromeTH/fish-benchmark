@@ -38,6 +38,9 @@ if __name__ == "__main__":
     print(f"Artifact downloaded to {artifact_dir}")
     config = artifact.logged_by().config
     config['test_sliding_style'] = eval_config[config['sliding_style']]
+    config['training_run_id'] = args.run
+    config['training_entity'] = args.entity
+    config['training_project'] = args.project
     #define testing config
     tags_keys = [
         'dataset', 
@@ -79,14 +82,4 @@ if __name__ == "__main__":
     lit_module.to(device)
     trainer = L.Trainer(logger=wandb_logger, log_every_n_steps= 50)
     results = trainer.test(lit_module, test_dataloader)
-    test_metrics = results[0]
-    metric_file_path = os.path.join(TEST_METRIC_DIR, f'test_metrics-{wandb_logger.experiment.id}.json')
-    with open(metric_file_path, "w") as f:
-        json.dump(test_metrics, f, indent=4)
-    artifact = wandb.Artifact(
-        f"test_metrics-{wandb_logger.experiment.id}", 
-        type="metrics", 
-        description=f"Test metrics for model trained in run {args.run}"
-    )
-    artifact.add_file(metric_file_path)
-    wandb_logger.experiment.log_artifact(artifact)
+#python evaluation/main.py --entity fish-benchmark --project abby --run g5hc3uqy

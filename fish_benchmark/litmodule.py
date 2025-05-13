@@ -88,9 +88,14 @@ class LitBinaryClassifierModule(L.LightningModule):
         return self.shared_step(batch, 'val')
     
     def test_step(self, batch, batch_idx):
-        output = self.shared_step(batch, 'test')
-        self.test_outputs.append(output)
-        return output
+        x, y = batch
+        logits = self.model(x)
+        probs = torch.sigmoid(logits)
+        preds = (probs > 0.5).float()
+        self.test_outputs.append({
+            "preds": preds,
+            "targets": y
+        })
     
     def on_test_epoch_end(self):
         preds = torch.cat([x["preds"] for x in self.test_outputs], dim=0)
@@ -102,18 +107,24 @@ class LitBinaryClassifierModule(L.LightningModule):
         metrics = {
             "f1_micro": multilabel_f1_score(preds, targets, num_labels=num_classes, average="micro").item(),
             "f1_macro": multilabel_f1_score(preds, targets, num_labels=num_classes, average="macro").item(),
+            "precision_micro": multilabel_precision(preds, targets, num_labels=num_classes, average="micro").item(),
+            "precision_macro": multilabel_precision(preds, targets, num_labels=num_classes, average="macro").item(),
+            "recall_micro": multilabel_recall(preds, targets, num_labels=num_classes, average="micro").item(),
+            "recall_macro": multilabel_recall(preds, targets, num_labels=num_classes, average="macro").item(),
             "mAP": multilabel_average_precision(preds, targets, num_labels=num_classes, average="macro").item(),
             "acc": (preds == targets).float().mean().item(),
         }
-
-        f1_per_class = multilabel_f1_score(preds, targets, num_labels=num_classes, average=None)
-        for i, f1 in enumerate(f1_per_class):
-            metrics[f"f1_class_{i}"] = f1.item()
-
-        num_positives = targets.float().sum(dim=0)
-        for i, count in enumerate(num_positives):
-            metrics[f"num_positive_class_{i}"] = count.item()
-
+        for k, v in metrics.items():
+            self.log(f"test_{k}", v)
+        per_class_metrics = {
+            "f1": multilabel_f1_score(preds, targets, num_labels=num_classes, average=None).tolist(),
+            "precision": multilabel_precision(preds, targets, num_labels=num_classes, average=None).tolist(),
+            "recall": multilabel_recall(preds, targets, num_labels=num_classes, average=None).tolist(),
+            "num_positive": targets.float().sum(dim=0).tolist()
+        }
+        for k, v in per_class_metrics.items():
+            for i, val in enumerate(v):
+                self.log(f"test_{k}_class_{i}", val)
         return metrics
     
     def configure_optimizers(self):
