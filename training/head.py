@@ -12,7 +12,7 @@ import yaml
 import argparse
 from lightning.pytorch.callbacks import ModelCheckpoint
 import sys
-from artifact import log_best_model, log_dataset_summary
+from artifact import log_best_model, log_dataset_summary, log_latest_model
 import os
 import json
 # python training/head.py --classifier mlp --dataset abby --sliding_style frames --model dino
@@ -140,13 +140,23 @@ if __name__ == '__main__':
                 .set_aggregator(AGGREGATOR)
                 .build())
     
-    checkpoint_callback = ModelCheckpoint(
+    best_ckpt = ModelCheckpoint(
         monitor=MONITOR,
         save_top_k=1,
         mode="max",
         dirpath=f"./checkpoints/{wandb_logger.experiment.id}",
         filename="best-{epoch:02d}-{val_mAP:.2f}",
     )
+
+    # Latest checkpoint (overwrite each epoch)
+    latest_ckpt = ModelCheckpoint(
+        save_top_k=1,
+        every_n_epochs=1,
+        save_last=True,
+        dirpath=f"./checkpoints/{wandb_logger.experiment.id}",
+        filename="latest",
+    )
+
 
     lit_module = LitBinaryClassifierModule(classifier, 
                                            learning_rate = wandb_logger.experiment.config['learning_rate'], 
@@ -156,9 +166,10 @@ if __name__ == '__main__':
     trainer = L.Trainer(max_epochs=wandb_logger.experiment.config['epochs'], 
                         logger=wandb_logger, 
                         log_every_n_steps= 50, 
-                        callbacks=[checkpoint_callback], 
+                        callbacks=[best_ckpt, latest_ckpt], 
                         check_val_every_n_epoch = 5)
     
     trainer.fit(lit_module, train_dataloader, val_dataloader)
-    log_best_model(checkpoint_callback, wandb_logger.experiment)
+    log_best_model(best_ckpt, wandb_logger.experiment)
+    log_latest_model(latest_ckpt, wandb_logger.experiment)
     # log_dataset_summary(train_dataset, run)

@@ -10,8 +10,8 @@ from datetime import datetime, timezone
 
 # ==== CONFIG ====
 ENTITY = "fish-benchmark"
-PROJECT = "abby"
-PARALLEL = False
+PROJECT = "mike"
+PARALLEL = True
 # cutoff = datetime(2024, 5, 12, 17, 44, tzinfo=timezone.utc)
 
 filt = {

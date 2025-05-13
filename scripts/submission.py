@@ -16,7 +16,7 @@ def get_slurm_submission_command(name, output_dir, wrap_cmd, gpu_types = "", gpu
         f"-o {out} "
         f"-e {err} "
         f"-N 1 -n 1 --get-user-env --requeue --time=infinite "
-        f"--cpus-per-task=8 --mem=256G --partition=jjs533,gpu "
+        f"--cpus-per-task=8 --mem=256G --partition=gpu "
         f"{gres}"
         f'--wrap="{wrap_cmd}"'
     )

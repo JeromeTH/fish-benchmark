@@ -10,18 +10,18 @@ from fish_benchmark.utils import setup_logger
 MODELS = [
     'dino', 
     'dino_large',
-    'videomae'
+    # 'videomae'
 ]
 CLASSIFIERS = [
     'mlp'
 ]
 POOLINGS = [
     'mean', 
-    'attention'
+    # 'attention'
 ]
 DATASETS = [
     'abby', 
-    'mike'
+    # 'mike'
 ]
 SLIDING_STYLES = [
     'frames', 
@@ -32,18 +32,18 @@ SLIDING_STYLES = [
     'fix_patched_512',
 ]
 SAMPLERS = [
-    'balanced',
-    'random'
+    # 'random', 
+    'balanced'
 ]
 OUTPUT_BASE = os.path.join('logs', 'train')
-PARALLEL = True
+PARALLEL = False
 model_config = yaml.safe_load(open("config/models.yml", "r"))
 dataset_config = yaml.safe_load(open("config/datasetsv2.yml", "r"))
 
 logger = setup_logger(
     'extract_features', 
     os.path.join(OUTPUT_BASE, 'extract_features.log'), 
-    console=False, 
+    console=(not PARALLEL), 
     file=True
 )
 
@@ -70,7 +70,7 @@ def main():
                                 submission_name,
                                 OUTPUT_DIR,
                                 wrap_cmd,
-                                gpu=1
+                                gpu_count=1
                             ) if PARALLEL else wrap_cmd
                             logger.info(f"Running command for {submission_name} with command: {command}")
                             subprocess.run(command, shell=True, check=True)
