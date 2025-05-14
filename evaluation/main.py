@@ -85,9 +85,11 @@ if __name__ == "__main__":
     trainer = L.Trainer(logger=wandb_logger, log_every_n_steps= 50, limit_test_batches=10)
     trainer.test(lit_module, test_dataloader)
 
+    probs = torch.stack(lit_module.prob_list).cpu()
+    targets = torch.stack(lit_module.target_list).cpu()
     output_dict = {
-        "probs": lit_module.prob_list,
-        "targets": lit_module.target_list
+        "probs": probs.tolist(),
+        "targets": targets.tolist()
     }
 
     json_path = os.path.join(TEST_METRIC_DIR, f"{wandb_logger.experiment.id}.json")
