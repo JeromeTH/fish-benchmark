@@ -84,15 +84,18 @@ if __name__ == "__main__":
     lit_module.to(device)
     trainer = L.Trainer(logger=wandb_logger, log_every_n_steps= 50, limit_test_batches=10)
     trainer.test(lit_module, test_dataloader)
-    json_outputs = [
-        {
-            "preds": o["preds"].tolist(),
-            "targets": o["targets"].tolist()
-        }
-        for o in lit_module.test_outputs
-    ]
-    # Save to JSON file
-    with open(os.path.join(TEST_METRIC_DIR, f"{wandb_logger.experiment.id}.json"), "w") as f:
-        json.dump(json_outputs, f, indent=2)
+    probs_list = [p.tolist() for p in lit_module.prob_list]
+    targets_list = [t.tolist() for t in lit_module.target_list]
+
+    output_dict = {
+        "probs": probs_list,
+        "targets": targets_list
+    }
+
+    json_path = os.path.join(TEST_METRIC_DIR, f"{wandb_logger.experiment.id}.json")
+    with open(json_path, "w") as f:
+        json.dump(output_dict, f, indent=2)
+
+    print(f"Saved JSON output to {json_path}")
 
 #python evaluation/main.py --entity fish-benchmark --project abby --run g5hc3uqy

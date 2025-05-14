@@ -19,7 +19,8 @@ class LitBinaryClassifierModule(L.LightningModule):
         super().__init__()
         self.save_hyperparameters()  # Automatically saves learning_rate to self.hparams
         self.model = model
-        self.test_outputs = []
+        self.prob_list = []
+        self.target_list = []
 
     def log_additional_metrics(self, prefix, preds, y):
         """
@@ -91,10 +92,8 @@ class LitBinaryClassifierModule(L.LightningModule):
         x, y = batch
         logits = self.model(x)
         probs = torch.sigmoid(logits)
-        self.test_outputs.append({
-            "probs": probs,
-            "targets": y
-        })
+        self.prob_list.append(probs.detach().cpu())
+        self.target_list.append(y.detach().cpu())
     
     # def on_test_epoch_end(self):
     #     preds = torch.cat([x["preds"] for x in self.test_outputs], dim=0)
