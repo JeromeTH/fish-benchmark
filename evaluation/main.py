@@ -98,4 +98,13 @@ if __name__ == "__main__":
 
     print(f"Saved JSON output to {json_path}")
 
+    # Create and log W&B artifact
+    artifact = wandb.Artifact(
+        name=f"test_metrics_{wandb_logger.experiment.id}",
+        type="metrics",
+        description="Model test probabilities and targets",
+    )
+    artifact.add_file(json_path)
+    wandb_logger.experiment.log_artifact(artifact)
+
 #python evaluation/main.py --entity fish-benchmark --project abby --run g5hc3uqy
