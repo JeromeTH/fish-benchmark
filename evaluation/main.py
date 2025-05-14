@@ -84,12 +84,10 @@ if __name__ == "__main__":
     lit_module.to(device)
     trainer = L.Trainer(logger=wandb_logger, log_every_n_steps= 50, limit_test_batches=10)
     trainer.test(lit_module, test_dataloader)
-    probs_list = [p.tolist() for p in lit_module.prob_list]
-    targets_list = [t.tolist() for t in lit_module.target_list]
 
     output_dict = {
-        "probs": probs_list,
-        "targets": targets_list
+        "probs": lit_module.prob_list,
+        "targets": lit_module.target_list
     }
 
     json_path = os.path.join(TEST_METRIC_DIR, f"{wandb_logger.experiment.id}.json")

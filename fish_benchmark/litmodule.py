@@ -92,8 +92,8 @@ class LitBinaryClassifierModule(L.LightningModule):
         x, y = batch
         logits = self.model(x)
         probs = torch.sigmoid(logits)
-        self.prob_list.append(probs.detach().cpu())
-        self.target_list.append(y.detach().cpu())
+        self.prob_list.extend(probs.detach().cpu().tolist())   # each item is a list of floats
+        self.target_list.extend(y.detach().cpu().tolist())     # each item is a list of ints
     
     # def on_test_epoch_end(self):
     #     preds = torch.cat([x["preds"] for x in self.test_outputs], dim=0)
