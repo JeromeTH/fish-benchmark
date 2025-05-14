@@ -74,7 +74,7 @@ if __name__ == "__main__":
     test_dataloader = DataLoader(
         test_dataset, 
         batch_size=wandb_logger.experiment.config["batch_size"],
-        shuffle=wandb_logger.experiment.config["shuffle"],
+        shuffle=False,
         num_workers=7,
         pin_memory=True,
     )
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     lit_module.freeze()
     lit_module.eval()
     lit_module.to(device)
-    trainer = L.Trainer(logger=wandb_logger, log_every_n_steps= 50, limit_test_batches=10)
+    trainer = L.Trainer(logger=wandb_logger, log_every_n_steps= 50)
     trainer.test(lit_module, test_dataloader)
 
     probs = torch.stack(lit_module.prob_list).cpu()
@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
     # Create and log W&B artifact
     artifact = wandb.Artifact(
-        name=f"test_metrics_{wandb_logger.experiment.id}",
+        name=f"test_metrics_{wandb_logger.experiment.id}.json",
         type="metrics",
         description="Model test probabilities and targets",
     )

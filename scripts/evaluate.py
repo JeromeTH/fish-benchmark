@@ -10,17 +10,17 @@ from datetime import datetime, timezone
 
 # ==== CONFIG ====
 ENTITY = "fish-benchmark"
-PROJECT = "abby"
+PROJECT = "mike"
 PARALLEL = False
 # cutoff = datetime(2024, 5, 12, 17, 44, tzinfo=timezone.utc)
 #srun -p gpu -n 8 --mem=48g --time=24:00:00 --pty /bin/bash
 filt = {
     "dataset": "*",
     "sliding_style": "*",
-    "backbone": "*",
+    "backbone": "videomae",
     "pooling": "mean",
     "classifier": "mlp",
-    "sampler": "*",
+    "sampler": "balanced",
 }
 def match_config(config, filt):
     return all(config.get(k) == v or (v == '*' and k in config) for k, v in filt.items())
