@@ -1,12 +1,15 @@
 import argparse
+print("Importing wandb")
 import wandb
 from fish_benchmark.litmodule import LitBinaryClassifierModule
 from fish_benchmark.data.dataset import DatasetBuilder
 import os
 import yaml
+print("importing torch")
 import torch
 from torch.utils.data import DataLoader
 from pytorch_lightning.loggers import WandbLogger
+print("Importing lightning")
 import lightning as L
 import json
 import glob
@@ -28,7 +31,6 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
-
     #load the artifact
     api = wandb.Api()
     artifact = api.artifact(f"{args.entity}/{args.project}/model-{args.run}:latest", type="model")
@@ -80,6 +82,17 @@ if __name__ == "__main__":
     lit_module.freeze()
     lit_module.eval()
     lit_module.to(device)
-    trainer = L.Trainer(logger=wandb_logger, log_every_n_steps= 50)
-    results = trainer.test(lit_module, test_dataloader)
+    trainer = L.Trainer(logger=wandb_logger, log_every_n_steps= 50, limit_test_batches=10)
+    trainer.test(lit_module, test_dataloader)
+    json_outputs = [
+        {
+            "preds": o["preds"].tolist(),
+            "targets": o["targets"].tolist()
+        }
+        for o in lit_module.test_outputs
+    ]
+    # Save to JSON file
+    with open(os.path.join(TEST_METRIC_DIR, f"{wandb_logger.experiment.id}.json"), "w") as f:
+        json.dump(json_outputs, f, indent=2)
+
 #python evaluation/main.py --entity fish-benchmark --project abby --run g5hc3uqy

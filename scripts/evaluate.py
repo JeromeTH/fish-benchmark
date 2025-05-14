@@ -10,10 +10,10 @@ from datetime import datetime, timezone
 
 # ==== CONFIG ====
 ENTITY = "fish-benchmark"
-PROJECT = "mike"
-PARALLEL = True
+PROJECT = "abby"
+PARALLEL = False
 # cutoff = datetime(2024, 5, 12, 17, 44, tzinfo=timezone.utc)
-
+#srun -p gpu -n 8 --mem=48g --time=24:00:00 --pty /bin/bash
 filt = {
     "dataset": "*",
     "sliding_style": "*",
@@ -67,3 +67,5 @@ def main():
         subprocess.run(cmd, shell=True, check=True)
 if __name__ == "__main__":
     main()
+
+# python evaluation/main.py --entity fish-benchmark --project abby --run q6150o9n
