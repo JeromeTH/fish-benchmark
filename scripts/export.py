@@ -126,9 +126,11 @@ def compute_with_label_tolerance(results, label_tolerance, output_path):
             Metric("recall_micro", multilabel_recall, {"num_labels": num_classes, "average": "micro"}),
             Metric("recall_macro", multilabel_recall, {"num_labels": num_classes, "average": "macro"}),
             Metric("mAP", multilabel_average_precision, {"num_labels": num_classes, "average": "macro"}),
-            Metric("acc", lambda x,y: (x == y).float().mean(), {}),
+            Metric("acc", lambda x,y: ((x > 0.5) == y).float().mean(), {}),
             Metric("f1_per_class", multilabel_f1_score, {"num_labels": num_classes, "average": None}),
             Metric("mAP_per_class", multilabel_average_precision, {"num_labels": num_classes, "average": None}),
+            Metric("precision_per_class", multilabel_precision, {"num_labels": num_classes, "average": None}),
+            Metric("recall_per_class", multilabel_recall, {"num_labels": num_classes, "average": None}),
         ]
         
         results = calc.compute(metrics, label_tolerance=label_tolerance)
