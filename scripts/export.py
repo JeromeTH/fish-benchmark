@@ -20,7 +20,7 @@ from torchmetrics.functional.classification import (
 
 # ==== CONFIG ====
 ENTITY = "fish-benchmark"
-PROJECT = "mike_eval"
+PROJECT = "abby_eval"
 LABEL_TOLERANCES = [0, 1, 3, 5, 7]
 PARALLEL = False
 DOWNLOAD_DIR = "test_metrics"
@@ -131,6 +131,7 @@ def compute_with_label_tolerance(results, label_tolerance, output_path):
             Metric("mAP_per_class", multilabel_average_precision, {"num_labels": num_classes, "average": None}),
             Metric("precision_per_class", multilabel_precision, {"num_labels": num_classes, "average": None}),
             Metric("recall_per_class", multilabel_recall, {"num_labels": num_classes, "average": None}),
+            Metric("positive_per_class", lambda x,y: (y.sum(dim=0) > 0).float(), {}),
         ]
         
         results = calc.compute(metrics, label_tolerance=label_tolerance)
