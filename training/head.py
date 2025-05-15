@@ -152,11 +152,10 @@ if __name__ == '__main__':
     latest_ckpt = ModelCheckpoint(
         save_top_k=1,
         every_n_epochs=1,
-        save_last=True,
+        save_on_train_epoch_end=True,
         dirpath=f"./checkpoints/{wandb_logger.experiment.id}",
         filename="latest",
     )
-
 
     lit_module = LitBinaryClassifierModule(classifier, 
                                            learning_rate = wandb_logger.experiment.config['learning_rate'], 
@@ -167,9 +166,17 @@ if __name__ == '__main__':
                         logger=wandb_logger, 
                         log_every_n_steps= 50, 
                         callbacks=[best_ckpt, latest_ckpt], 
-                        check_val_every_n_epoch = 5)
+                        check_val_every_n_epoch = 5, 
+                        limit_val_batches=100)
     
     trainer.fit(lit_module, train_dataloader, val_dataloader)
-    log_best_model(best_ckpt, wandb_logger.experiment)
-    log_latest_model(latest_ckpt, wandb_logger.experiment)
+    
+    try: 
+        log_best_model(best_ckpt, wandb_logger.experiment)
+    except Exception as e:
+        print(f"Error logging best model: {e}")
+    try:
+        log_latest_model(latest_ckpt, wandb_logger.experiment)
+    except Exception as e:
+        print(f"Error logging latest model: {e}")
     # log_dataset_summary(train_dataset, run)

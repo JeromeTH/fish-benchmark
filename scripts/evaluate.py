@@ -16,14 +16,15 @@ PARALLEL = False
 #srun -p gpu -n 8 --mem=48g --time=24:00:00 --pty /bin/bash
 filt = {
     "dataset": "*",
-    "sliding_style": "*",
+    "sliding_style": "sliding_window_w_temp, sliding_window_w_stride",
     "backbone": "videomae",
     "pooling": "mean",
     "classifier": "mlp",
     "sampler": "balanced",
 }
 def match_config(config, filt):
-    return all(config.get(k) == v or (v == '*' and k in config) for k, v in filt.items())
+    return all(config.get(k) in [x.strip() for x in v.split(',')] 
+               or (v == '*' and k in config) for k, v in filt.items())
 
 def get_wrap_cmd(entity, project, run_id):
     return (

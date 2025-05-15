@@ -10,7 +10,7 @@ from fish_benchmark.utils import setup_logger
 MODELS = [
     'dino', 
     'dino_large',
-    # 'videomae'
+    'videomae'
 ]
 CLASSIFIERS = [
     'mlp'
@@ -20,16 +20,16 @@ POOLINGS = [
     # 'attention'
 ]
 DATASETS = [
-    'abby', 
-    # 'mike'
+    # 'abby', 
+    'mike'
 ]
 SLIDING_STYLES = [
-    'frames', 
+    # 'frames', 
     'frames_w_temp', 
-    'sliding_window', 
-    'sliding_window_w_temp', 
-    'sliding_window_w_stride', 
-    'fix_patched_512',
+    # 'sliding_window', 
+    # 'sliding_window_w_temp', 
+    # 'sliding_window_w_stride', 
+    # 'fix_patched_512',
 ]
 SAMPLERS = [
     # 'random', 

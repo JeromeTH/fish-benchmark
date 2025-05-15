@@ -32,13 +32,27 @@ def get_args():
 if __name__ == "__main__":
     args = get_args()
     #load the artifact
-    api = wandb.Api()
-    artifact = api.artifact(f"{args.entity}/{args.project}/model-{args.run}:latest", type="model")
-    artifact_dir = artifact.download()
-    ckpt_file = glob.glob(os.path.join(artifact_dir, "*.ckpt"))
-    assert len(ckpt_file) == 1, f"Expected exactly one .ckpt file in {artifact_dir}"
-    print(f"Artifact downloaded to {artifact_dir}")
-    config = artifact.logged_by().config
+    try: 
+        api = wandb.Api()
+        artifact = api.artifact(f"{args.entity}/{args.project}/model-{args.run}:latest", type="model")
+        artifact_dir = artifact.download()
+        print(f"Artifact downloaded to {artifact_dir}")
+        ckpt_files = glob.glob(os.path.join(artifact_dir, "*.ckpt"))
+        assert len(ckpt_files) == 1, f"Expected exactly one .ckpt file in {artifact_dir}"
+        ckpt_file = ckpt_files[0]
+    except Exception as e:
+        #load from ./checkpoints/<run_id>/best<something>.ckpt
+        print(f"Failed to download artifact: {e}")
+        print(f"Trying to load from local path")
+        ckpt_pattern = os.path.join('checkpoints', args.run, 'best*.ckpt')
+        ckpt_files = glob.glob(ckpt_pattern)
+        assert len(ckpt_files) == 1, f"Expected exactly one checkpoint file matching 'best*.ckpt' in {ckpt_pattern}"
+        ckpt_file = ckpt_files[0]
+        print(f"Loaded checkpoint from {ckpt_file}")
+        
+    training_run = wandb.Api().run(f"{args.entity}/{args.project}/{args.run}")
+    config = training_run.config
+    
     config['test_sliding_style'] = eval_config[config['sliding_style']]
     config['training_run_id'] = args.run
     config['training_entity'] = args.entity
@@ -78,7 +92,7 @@ if __name__ == "__main__":
         num_workers=7,
         pin_memory=True,
     )
-    lit_module = LitBinaryClassifierModule.load_from_checkpoint(ckpt_file[0])
+    lit_module = LitBinaryClassifierModule.load_from_checkpoint(ckpt_file)
     lit_module.freeze()
     lit_module.eval()
     lit_module.to(device)
