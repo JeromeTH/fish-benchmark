@@ -17,14 +17,31 @@ from torchmetrics.functional.classification import (
     multilabel_f1_score,
     multilabel_average_precision
 )
+from functools import reduce
+
 
 # ==== CONFIG ====
 ENTITY = "fish-benchmark"
-PROJECT = "abby_eval"
+DATASET = 'mike'
+PROJECT = f"{DATASET}_eval"
 LABEL_TOLERANCES = [0, 1, 3, 5, 7]
 PARALLEL = False
 DOWNLOAD_DIR = "test_metrics"
 
+subgroup_mappings = {
+    "abby": {
+        'biting': [0, 1], 
+        'aggression': [3, 4]
+    }, 
+    "mike":{
+        'habitat': [16, 17, 19], 
+        'biting': [1, 2, 6, 9], 
+        'movement': [3, 4], 
+        'foraging': [8, 11, 14], 
+        'interactions': [5, 7, 13], 
+        'other': [0, 10, 12, 15, 18]
+    }
+}
 # cutoff = datetime(2024, 5, 12, 17, 44, tzinfo=timezone.utc)
 
 filt = {
@@ -73,13 +90,19 @@ class MetricCalculator:
         flooded_cols = [self.flood(col, dis) for col in cols]
         return torch.stack(flooded_cols, dim=1) 
 
-    def compute(self, metrics: List[Metric], label_tolerance = 0) -> Dict[str, Union[float, List[float]]]:
+    def compute(self, metrics: List[Metric], label_tolerance = 0, column_subset = None, prefix = None) -> Dict[str, Union[float, List[float]]]:
         results = {}
-        transformed_targets = self.flood_all_columns(self.targets, label_tolerance)
+        probs = self.probs if column_subset is None else self.probs[:, column_subset]
+        targets = self.targets if column_subset is None else self.targets[:, column_subset]
+        transformed_targets = self.flood_all_columns(targets, label_tolerance)
+        assert probs.shape == transformed_targets.shape, f"probs shape {probs.shape} and targets shape {transformed_targets.shape} should match"
+        num_classes = probs.shape[1]
         for metric in metrics: 
-            output = metric.fn(self.probs, transformed_targets, **metric.kwargs)
+            if "num_labels" in metric.kwargs.keys(): metric.kwargs["num_labels"] = num_classes
+            output = metric.fn(probs, transformed_targets, **metric.kwargs)
             assert isinstance(output, torch.Tensor), f"Output of {metric.name} should be a tensor, but got {type(output)}"
-            results[metric.name] = output.tolist() if output.ndim > 0 else output.item()            
+            result_name = f'{prefix}_{metric.name}' if prefix else metric.name
+            results[result_name] = output.tolist() if output.ndim > 0 else output.item()            
         return results
     
 def get_results(runs):
@@ -119,23 +142,30 @@ def compute_with_label_tolerance(results, label_tolerance, output_path):
         )
         num_classes = probs.shape[1]
         metrics = [
-            Metric("f1_micro", multilabel_f1_score, {"num_labels": num_classes, "average": "micro"}),
-            Metric("f1_macro", multilabel_f1_score, {"num_labels": num_classes, "average": "macro"}),
-            Metric("precision_micro", multilabel_precision, {"num_labels": num_classes, "average": "micro"}),
-            Metric("precision_macro", multilabel_precision, {"num_labels": num_classes, "average": "macro"}),
-            Metric("recall_micro", multilabel_recall, {"num_labels": num_classes, "average": "micro"}),
-            Metric("recall_macro", multilabel_recall, {"num_labels": num_classes, "average": "macro"}),
-            Metric("mAP", multilabel_average_precision, {"num_labels": num_classes, "average": "macro"}),
+            #num_labels would be dynamically determined by the shape of probs
+            Metric("f1_micro", multilabel_f1_score, {"num_labels": None, "average": "micro"}),
+            Metric("f1_macro", multilabel_f1_score, {"num_labels": None, "average": "macro"}),
+            Metric("precision_micro", multilabel_precision, {"num_labels": None, "average": "micro"}),
+            Metric("precision_macro", multilabel_precision, {"num_labels": None, "average": "macro"}),
+            Metric("recall_micro", multilabel_recall, {"num_labels": None, "average": "micro"}),
+            Metric("recall_macro", multilabel_recall, {"num_labels": None, "average": "macro"}),
+            Metric("mAP", multilabel_average_precision, {"num_labels": None, "average": "macro"}),
             Metric("acc", lambda x,y: ((x > 0.5) == y).float().mean(), {}),
-            Metric("f1_per_class", multilabel_f1_score, {"num_labels": num_classes, "average": None}),
-            Metric("mAP_per_class", multilabel_average_precision, {"num_labels": num_classes, "average": None}),
-            Metric("precision_per_class", multilabel_precision, {"num_labels": num_classes, "average": None}),
-            Metric("recall_per_class", multilabel_recall, {"num_labels": num_classes, "average": None}),
-            Metric("positive_per_class", lambda x,y: (y.sum(dim=0) > 0).float(), {}),
+            Metric("f1_per_class", multilabel_f1_score, {"num_labels": None, "average": None}),
+            Metric("mAP_per_class", multilabel_average_precision, {"num_labels": None, "average": None}),
+            Metric("precision_per_class", multilabel_precision, {"num_labels": None, "average": None}),
+            Metric("recall_per_class", multilabel_recall, {"num_labels": None, "average": None}),
+            Metric("positive_per_class", lambda _,y: (y.sum(dim=0)).float(), {}),
         ]
         
-        results = calc.compute(metrics, label_tolerance=label_tolerance)
-        row = run.config | {"run_id": run.id} | results
+        aggregate_results = calc.compute(metrics, label_tolerance=label_tolerance)
+        per_group_results = reduce(lambda a, b: a | b, 
+                                   [calc.compute(metrics, 
+                                                 label_tolerance=label_tolerance, 
+                                                 column_subset=subgroup_mappings[DATASET][k], 
+                                                 prefix=k) 
+                                                 for k in subgroup_mappings[DATASET].keys()]) 
+        row = run.config | {"run_id": run.id} | aggregate_results | per_group_results
         rows.append(row)
             
     #write to csv
@@ -162,7 +192,7 @@ def main():
     print("fetching data")
     results = get_results(latest_runs_by_group.values())
     for label_tolerance in LABEL_TOLERANCES:
-        output_path = os.path.join('results', f"{PROJECT}_tolerance={label_tolerance}.csv")
+        output_path = os.path.join('results', f"{PROJECT}_tol={label_tolerance}_w_subgroup_metrics.csv")
         compute_with_label_tolerance(results, label_tolerance, output_path)
     print("Done")
 if __name__ == "__main__":
