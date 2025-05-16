@@ -9,6 +9,8 @@ import wandb
 import csv
 import json
 import torch 
+import numpy as np
+from functools import partial
 from typing import Callable, Dict, List, Union
 from dataclasses import dataclass
 from torchmetrics.functional.classification import (
@@ -75,28 +77,36 @@ class MetricCalculator:
         self.probs = probs
         self.targets = targets
 
-    def flood(self, bits, dis):
-        #bits (d,) 
-        res = torch.zeros_like(bits)
-        for i in range(bits.shape[0]):
-            region = bits[i - dis: i + dis + 1]
-            if region.sum() > 0:
+    def flood_1d(self, bits, dis):
+        res = np.zeros_like(bits)
+        last = None
+        for i in range(len(bits)):
+            if bits[i] == 1:
+                last = i
+                res[i] = 1
+            elif last is not None and i - last <= dis:
                 res[i] = 1
         return res
-    
-    def flood_all_columns(self, targets, dis):
-        # targets: (n, d)
-        cols = torch.unbind(targets, dim=1)            # list of (n,) tensors
-        flooded_cols = [self.flood(col, dis) for col in cols]
-        return torch.stack(flooded_cols, dim=1) 
 
+    def flood(self, bits, dis):
+        left = self.flood_1d(bits, dis)
+        right = self.flood_1d(bits[::-1], dis)[::-1]
+        return np.logical_or(left, right)
+
+    def flood_all_columns(self, targets, dis):
+        # targets: (n, d), apply flood along axis 0 per column
+        flood_func = partial(self.flood, dis=dis)
+        return np.apply_along_axis(flood_func, axis=0, arr=targets)
+    
     def compute(self, metrics: List[Metric], label_tolerance = 0, column_subset = None, prefix = None) -> Dict[str, Union[float, List[float]]]:
         results = {}
         probs = self.probs if column_subset is None else self.probs[:, column_subset]
         targets = self.targets if column_subset is None else self.targets[:, column_subset]
-        transformed_targets = self.flood_all_columns(targets, label_tolerance)
+        #print(f"flooding with label tolerance {label_tolerance} on {targets.shape[0]} samples and {targets.shape[1]} classes")
+        transformed_targets = torch.from_numpy(self.flood_all_columns(targets.cpu().numpy(), label_tolerance)) 
         assert probs.shape == transformed_targets.shape, f"probs shape {probs.shape} and targets shape {transformed_targets.shape} should match"
         num_classes = probs.shape[1]
+        #print(f"calculating {len(metrics)} metrics")
         for metric in metrics: 
             if "num_labels" in metric.kwargs.keys(): metric.kwargs["num_labels"] = num_classes
             output = metric.fn(probs, transformed_targets, **metric.kwargs)
